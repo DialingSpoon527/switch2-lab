@@ -1,8 +1,15 @@
 # switch2-lab
 
+> **For developers and people researching homebrew.** This is not a modding
+> guide or a collection of ready-to-install tools. Feel free to take the
+> concepts, adapt the original code, or package useful pieces into something
+> more complete.
+
 Useful tools, scripts, experiments, and other things made while tinkering with
 Switch 2 homebrew. This is a place to put work that is useful to me and might
-be useful for someone else to inspect, research, adapt, or learn from.
+be useful for someone else to inspect, research, adapt, or learn from. It can
+hold anything from a small helper script to a larger tool; it is not limited
+to formal research projects.
 
 **Almost everything here is vibecoded:** written largely with AI assistance,
 with human direction and testing. Expect rough code, mistakes, undocumented
@@ -12,18 +19,17 @@ properly or supporting it.
 
 ## What being here means
 
-I only add a tool or project after I have actually used the exact version on
-my own system and it worked for its stated purpose. For PC tools, that means
-using them in my own Switch 2 workflow; it does not imply the tool runs on the
-console. Each project records what I used, what worked, and what was not tested.
-Hardware results, offline checks, and guesses must be labeled separately.
+The tools here are things I have actually used on my own system and found useful
+for their stated purpose. For PC tools, that means using them in my own Switch 2
+workflow; it does not imply the tool runs on the console. Any testing notes
+describe a particular version, setup, and observation.
 
 That is a limited observation, **not a guarantee that it works for you or is
 safe**. It does not establish compatibility with other firmware or setups,
 long-term reliability, recovery from failure, or safety from online-service
 restrictions. Where applicable, mistakes can affect saves, installed content,
-homebrew access, or persistent storage. Project notes should describe the actual
-operations and known risks.
+homebrew access, or persistent storage. Something working for me does not mean
+I fully understand every consequence of what it does.
 
 Treat this as source to examine and a starting point for your own research.
 These are informal tools and working examples, not supported releases. There
@@ -32,25 +38,17 @@ Everything is provided as-is, with no guarantee of function or support.
 
 ## Projects
 
-| Project | What it does | Observed result |
-| --- | --- | --- |
-| None published yet | Projects are added individually after testing and approval. | No project claims are made by this scaffold. |
-
-Each approved project lives in `projects/<name>/` with its own source, notes,
-provenance, and limitations. This repository can hold many different kinds of
-useful work; a formal research project is not required.
-
-## Contents and provenance
-
-Do not upload console or account identifiers, secrets, private conversations,
-personal logs, game or firmware dumps, proprietary SDK material, or other
-material we do not have permission to redistribute. Public versions are curated
-copies; original local evidence is preserved separately. Required third-party
-attribution and license notices must be retained.
+No tools have been shared yet. This will be a mixed collection of things I find
+useful, with whatever source and notes make them worth looking at.
 
 ## Licensing
 
-No repository-wide code license has been selected. Check each project's explicit
-license and dependency notices; do not assume that public visibility grants
-permission to reuse code. A project's redistribution and license choices must
-be reviewed before it is added.
+Original code and documentation in this repository are offered under the
+[Unlicense](UNLICENSE). To the extent I hold any copyright interest in that
+work, I dedicate it to the public domain. I am not reserving exclusive rights
+to it or asking for credit for my original contributions.
+
+You are welcome to copy, modify, reuse, package, sell, or build on that work.
+Third-party code and dependencies retain their own licenses and any required
+notices. This dedication covers only rights I can grant; it does not claim
+ownership of anyone else's work or override their terms.
