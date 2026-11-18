@@ -38,8 +38,9 @@ Everything is provided as-is, with no guarantee of function or support.
 
 ## Projects
 
-No tools have been shared yet. This will be a mixed collection of things I find
-useful, with whatever source and notes make them worth looking at.
+| Project | What it does | Observed use |
+| --- | --- | --- |
+| [HEN command bridge](projects/hen-command-bridge/) | PC command access to a running kaiHEN homebrew session. | Version 0.2.1 used for service commands, file operations, and native-call checks on one console. |
 
 ## Licensing
 
