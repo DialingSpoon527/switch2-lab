@@ -1,9 +1,9 @@
 # Included NRO and third-party notices
 
-[`hen-command-bridge.nro`](hen-command-bridge.nro) is the exact version 0.2.1 executable used on
-the maintainer's console. It is 412,991 bytes and has SHA-256:
+[`hen-command-bridge.nro`](hen-command-bridge.nro) is the exact version 0.3.0 executable used on
+the maintainer's console. It is 419,476 bytes and has SHA-256:
 
-`a7a9d2f0fe9ef5183621fbc2e8297fa8ac0a09d945aa8fb9205fc2c9d489cfb2`
+`109d1cac781125f77732ad104f3214949caf7dbc5ef76e7f8e22aab7b6239102`
 
 It has not been rebuilt or patched for this upload. Original diagnostic strings
 from the toolchain remain embedded. [Test observations and limits](TESTING.md)

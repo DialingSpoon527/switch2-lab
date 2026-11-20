@@ -1,6 +1,6 @@
 # Launcher icon
 
-`icon.jpg` is an original AI-generated terminal-and-network illustration,
-downsampled to a 256×256 RGB JPEG for the NRO launcher icon. It was generated
-for this project on November 18, 2026. It contains no vendor logos or game art.
-The exported JPEG has no EXIF entries or embedded personal metadata.
+`icon.svg` is the original vector artwork for the bridge. The NRO embeds
+`icon.jpg`, a 256×256 JPEG with no EXIF metadata. `render-icon.py` uses CairoSVG
+and Pillow to regenerate the JPEG and a local PNG preview. The build uses the
+included JPEG directly.

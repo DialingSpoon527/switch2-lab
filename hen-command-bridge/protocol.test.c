@@ -110,7 +110,28 @@ static void test_ipc_constraints(void) {
     assert(hcb_ipc_pointer_budget_valid(&p, 16));
 }
 
+static void test_bulk_reads(void) {
+    uint8_t mode[4]; hcb_put32(mode,1);
+    assert(hcb_opened_interface(Hcb_FspRoot,18,NULL,0,1)==Hcb_FileSystem);
+    assert(hcb_opened_interface(Hcb_FileSystem,8,mode,4,1)==Hcb_ReadFile);
+    assert(hcb_opened_interface(Hcb_FspRoot,200,NULL,0,1)==Hcb_Storage);
+    for (unsigned parent=0;parent<5;parent++) {
+        if (parent!=Hcb_FileSystem) assert(hcb_opened_interface(parent,8,mode,4,1)==Hcb_Unknown);
+        assert(hcb_opened_interface(parent,0,NULL,0,1)==Hcb_Unknown);
+    }
+    hcb_put32(mode,3); // A writable file is not granted the bulk-reader tag.
+    assert(hcb_opened_interface(Hcb_FileSystem,8,mode,4,1)==Hcb_Unknown);
+    assert(hcb_opened_interface(Hcb_FspRoot,18,NULL,0,2)==Hcb_Unknown);
+    assert(hcb_bulk_range(0,HCB_MAX_BULK,1)); // Clamped to EOF by reader.
+    assert(hcb_bulk_range(1,1,1)); // EOF returns an empty reply.
+    assert(!hcb_bulk_range(2,1,1));
+    assert(!hcb_bulk_range(UINT64_MAX,1,UINT64_MAX));
+    assert(!hcb_bulk_range(0,HCB_MAX_BULK+1,UINT32_MAX));
+    assert(!hcb_bulk_range(0,0,1));
+}
+
 int main(void) {
+    test_bulk_reads();
     test_parser();
     test_ipc_constraints();
     test_tls_layout();

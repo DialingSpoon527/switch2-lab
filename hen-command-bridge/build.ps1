@@ -9,7 +9,7 @@ $env:DEVKITPRO = $kit
 $output = Join-Path $PSScriptRoot 'build'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 $compiler = "$toolchain/devkitA64/bin/aarch64-none-elf-gcc.exe"
-$arch = @('-mcpu=cortex-a78c+crypto', '-mtp=soft', '-fPIE')
+$arch = @('-mcpu=cortex-a78c+crypto', '-mtp=soft', '-fPIE', "-ffile-prefix-map=$($PSScriptRoot.Replace('\','/'))=.")
 & $compiler @arch -std=gnu11 -O2 -g -Wall -Wextra -Werror -ffunction-sections -fdata-sections `
     -D__SWITCH__ -D__SWITCH2__ "-I$kit/libounce/include" "-I$kit/portlibs/switch2/include" `
     -c "$PSScriptRoot/main.c" -o "$output/main.o"
@@ -18,11 +18,11 @@ if ($LASTEXITCODE) { throw 'Command bridge compilation failed' }
     "-L$kit/portlibs/switch2/lib" "-L$kit/libounce/lib" '-Wl,--start-group' -lkaihen -lnx '-Wl,--end-group' `
     -o "$output/hen-command-bridge.elf"
 if ($LASTEXITCODE) { throw 'Command bridge link failed' }
-& "$toolchain/tools/bin/nacptool.exe" --create 'HEN command bridge' 'Local research tool' '0.2.1' "$output/hen-command-bridge.nacp"
+& "$toolchain/tools/bin/nacptool.exe" --create 'HEN command bridge' 'Local research tool' '0.3.0' "$output/hen-command-bridge.nacp"
 if ($LASTEXITCODE) { throw 'Command bridge metadata failed' }
 & "$toolchain/tools/bin/elf2nro.exe" "$output/hen-command-bridge.elf" "$output/hen-command-bridge.nro" "--nacp=$output/hen-command-bridge.nacp" "--icon=$PSScriptRoot/assets/icon.jpg"
 if ($LASTEXITCODE) { throw 'Command bridge NRO conversion failed' }
-$sourcePaths = @('main.c', 'protocol.h', 'client.cjs', 'cli.cjs', 'build.ps1', 'test-local.ps1', 'client.test.cjs', 'protocol.test.c', 'examples/smoke.cjs', 'examples/hen-status.json', 'assets/icon.jpg')
+$sourcePaths = @('main.c', 'protocol.h', 'client.cjs', 'cli.cjs', 'build.ps1', 'test-local.ps1', 'client.test.cjs', 'protocol.test.c', 'dump.cjs', 'dump.test.cjs', 'examples/smoke.cjs', 'examples/hen-status.json', 'assets/icon.jpg', 'assets/icon.svg', 'render-icon.py')
 $sources = @($sourcePaths | ForEach-Object {
     [ordered]@{path=$_; sha256=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $_) -Algorithm SHA256).Hash.ToLowerInvariant()}
 })
@@ -32,7 +32,7 @@ $dependencies = @($dependencyPaths | ForEach-Object {
 })
 $manifest = [ordered]@{
     preparedUtc=[DateTime]::UtcNow.ToString('o')
-    version='0.2.1'
+    version='0.3.0'
     hardwareTested=$false
     consoleRequestsMade=$false
     compiler=(& $compiler --version | Select-Object -First 1)

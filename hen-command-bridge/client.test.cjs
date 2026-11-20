@@ -140,3 +140,32 @@ test('64-bit memory addresses retain their full value on the wire', async () => 
     assert.equal(mock.received.length, 1);
   } finally { if (bridge) await bridge.close(); await mock.close(); }
 });
+
+test('eight-MiB reply is reconstructed correctly and EOF/errors preserve session alignment', async () => {
+  const body=Buffer.alloc(8*1024*1024,0xa7);
+  const mock=await mockBridge(({operation,payload,reply})=>{
+    if(operation===operations.networkRead)reply(body);
+    else if(operation===operations.readBulk)reply();
+    else if(operation===operations.readInfo)reply(Buffer.alloc(0),0xf0010009);
+    else reply(Buffer.from('{}'));
+  });
+  let bridge;
+  try{
+    bridge=await connect({host:'127.0.0.1',port:mock.port});
+    assert.deepEqual(await bridge.networkRead(body.length),body);
+    assert.equal((await bridge.readBulk(1,0n,1)).length,0);
+    await assert.rejects(bridge.readInfo(1),/0xf0010009/);
+    assert.deepEqual(await bridge.status(),{});
+  }finally{if(bridge)await bridge.close();await mock.close();}
+});
+
+test('large ordinary reply and short bulk reply are rejected', async () => {
+  for(const bulk of [false,true]){
+    const mock=await mockBridge(({reply})=>reply(Buffer.alloc(bulk?1:1024*1024+1)));
+    let bridge;
+    try{
+      bridge=await connect({host:'127.0.0.1',port:mock.port});
+      await assert.rejects(bulk?bridge.networkRead(2):bridge.status(),bulk?/Short network/:/Invalid bridge reply header/);
+    }finally{if(bridge)await bridge.close();await mock.close();}
+  }
+});

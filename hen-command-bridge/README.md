@@ -6,7 +6,7 @@ without repeatedly swapping console apps. It has been useful in my own
 homebrew workflow. It is largely vibecoded and shared as developer reference,
 with no guarantee of function, compatibility, safety, or support.
 
-Version **0.2.1**, wire protocol **2**. [Observed tests and limits](TESTING.md).
+Version **0.3.0**, wire protocol **2**. [Observed tests and limits](TESTING.md).
 
 ## What it does
 
@@ -14,6 +14,8 @@ Version **0.2.1**, wire protocol **2**. [Observed tests and limits](TESTING.md).
 - Opens services, clones sessions, manages domain objects, and obtains the
   handles exposed by kaiHEN's homebrew API.
 - Sends CMIF IPC requests with inline data, buffers, handles, and objects.
+- Streams read-only files to the PC in blocks up to 8 MiB, with SHA-256 and a
+  completion record. The SD benchmark copied to disk at 24.12 MiB/s.
 - Reads the bridge process's memory and allocates temporary buffers.
 - Uploads AArch64 code to a JIT allocation and calls native functions with up
   to eight integer/pointer arguments.
@@ -43,7 +45,7 @@ From this directory, with paths to your own installations:
 The output is `build/hen-command-bridge.nro`; `build/manifest.json` records
 source, dependency, and output hashes. A fresh build is marked untested until
 its own console test. The included [hen-command-bridge.nro](hen-command-bridge.nro)
-is the maintainer-tested 0.2.1 build; SDK components are separate.
+is the maintainer-tested 0.3.0 build; SDK components are separate.
 
 With HEN already running, copy the NRO to its own directory under `/switch/`
 on SD, verify the transfer, and launch it through hbmenu. While it is open:
@@ -51,6 +53,7 @@ on SD, verify the transfer, and launch it through hbmenu. While it is open:
 ```powershell
 node cli.cjs --host CONSOLE_IP status
 node cli.cjs --host CONSOLE_IP script examples/smoke.cjs
+node cli.cjs --host CONSOLE_IP dump-sd /switch/example.dat example.dat
 node cli.cjs --host CONSOLE_IP repl
 ```
 
@@ -94,10 +97,18 @@ bridge process. Native calls follow the integer/pointer AArch64 calling
 convention; floating-point arguments and structure returns need wrappers.
 The optional `--native` smoke check runs an integer-addition JIT function.
 
+`dump-sd` opens the input read-only and creates a new PC file and JSON record.
+The record marks incomplete copies. From a script, `bridge.dump(resource,
+destination, options)` accepts a supported read-only file or recognized
+storage object already opened through the bridge. Options include `offset`,
+`length`, and `chunk`. Reading a live source sequentially does not produce
+an atomic snapshot of data being modified.
+
 ## Limits and failure behavior
 
-Packets are limited to 1 MiB; buffers and memory reads to 256 KiB; inline IPC
-data to 128 bytes; each descriptor category to four items. IPC layouts must
+General packets are limited to 1 MiB, ordinary IPC buffers and memory reads
+to 256 KiB, inline IPC data to 128 bytes, and each descriptor category to four
+items. Dedicated bulk read replies can carry up to 8 MiB. IPC layouts must
 fit the 256-byte TLS area and the service's pointer-buffer capacity. There are
 64 resource slots and a 16 MiB budget for owned buffers/JIT allocations.
 Known FS and loader roots reject `SetCurrentProcess` to preserve their shared
@@ -127,6 +138,6 @@ PC client with localhost mock servers. They do not contact the console.
 The [test notes](TESTING.md) distinguish those checks from actual console use.
 
 The bridge implementation, client, tests, and scripts were written for this
-project with AI assistance. The icon is an original generated asset. Original
+project with AI assistance. The icon is original SVG artwork. Original
 work follows the repository's [Unlicense](../UNLICENSE); dependency licenses
 and notices remain separate in [DEPENDENCIES.md](DEPENDENCIES.md).

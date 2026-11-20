@@ -5,16 +5,19 @@ const MAGIC = 0x31424348;
 const VERSION = 2;
 const MAX_PACKET = 1024 * 1024;
 const MAX_BUFFER = 256 * 1024;
+const MAX_BULK = 8 * 1024 * 1024;
 const operations = Object.freeze({
   status: 2, getInfo: 3, query: 4, read: 5, alloc: 6, write: 7,
   close: 8, resources: 9, open: 10, clone: 11, domain: 12, ipc: 13,
   asService: 14, hen: 15, jit: 16, call: 17, symbols: 18, hints: 19,
+  readBulk: 20, readInfo: 21, readMemoryBulk: 22, networkRead: 23,
 });
 const errors = {
   0xf0010001: 'invalid command or payload',
   0xf0010003: 'resource unavailable in this connection', 0xf0010004: 'bridge limit exceeded',
   0xf0010005: 'close child objects first', 0xf0010006: 'invalid memory range',
   0xf0010007: 'unexpected IPC reply layout', 0xf0010008: 'shared FS identity must be preserved',
+  0xf0010009: 'bulk read requires a recognized read-only file or storage service',
 };
 const bufferAttributes = Object.freeze({
   in: 1, out: 2, map: 4, pointer: 8, fixed: 16, auto: 32, nonsecure: 64, nondevice: 128,
@@ -155,9 +158,11 @@ async function connect({host, port = 8090, timeout = 15000}) {
   if (typeof host !== 'string' || !host || /[\s/\\]/.test(host)) throw Error('Provide a console hostname or IP');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Invalid port');
   if (!Number.isSafeInteger(timeout) || timeout < 1) throw Error('Invalid timeout');
-  const socket = net.createConnection({host, port});
+  const socket = net.createConnection({host, port, highWaterMark: 4 * 1024 * 1024});
   socket.setNoDelay(true);
-  let pending = null, incoming = Buffer.alloc(0), closed = false, sequence = 0;
+  let pending = null, closed = false, sequence = 0;
+  const rxHeader=Buffer.alloc(24);
+  let headerUsed=0, rxPayload=null, payloadUsed=0, replyResult=0;
   let queue = Promise.resolve();
   function fail(error) {
     closed = true;
@@ -172,24 +177,31 @@ async function connect({host, port = 8090, timeout = 15000}) {
   socket.on('close', () => fail(Error('Bridge disconnected. The last command outcome may be unknown. Reconnect creates a new resource session.')));
   socket.on('data', chunk => {
     if (!pending) return fail(Error('Unexpected reply while no command was pending'));
-    if (incoming.length + chunk.length > MAX_PACKET + 24) return fail(Error('Oversized bridge reply'));
-    incoming = Buffer.concat([incoming, chunk]);
-    if (incoming.length < 24) return;
-    const length = incoming.readUInt32LE(12);
-    if (incoming.readUInt32LE() !== MAGIC || incoming.readUInt16LE(4) !== VERSION ||
-        incoming.readUInt16LE(6) !== pending.operation || incoming.readUInt32LE(8) !== pending.sequence ||
-        incoming.readUInt32LE(20) || length > MAX_PACKET) return fail(Error('Invalid bridge reply header'));
-    if (incoming.length < 24 + length) return;
-    if (incoming.length !== 24 + length) return fail(Error('Unexpected extra bridge reply data'));
-    const result = incoming.readUInt32LE(16);
-    const payload = Buffer.from(incoming.subarray(24));
-    const done = pending;
-    pending = null; incoming = Buffer.alloc(0); clearTimeout(done.timer);
-    if (result) {
-      const error = Error(`Bridge result 0x${result.toString(16)}${errors[result] ? ': ' + errors[result] : ''}`);
-      error.result = result;
-      done.reject(error);
-    } else done.resolve(payload);
+    let at=0;
+    while(at<chunk.length) {
+      if(rxPayload===null) {
+        const take=Math.min(24-headerUsed,chunk.length-at);
+        chunk.copy(rxHeader,headerUsed,at,at+take);headerUsed+=take;at+=take;
+        if(headerUsed<24) return;
+        const length=rxHeader.readUInt32LE(12);
+        const max=[operations.readBulk,operations.readMemoryBulk,operations.networkRead].includes(pending.operation)?MAX_BULK:MAX_PACKET;
+        if(rxHeader.readUInt32LE()!==MAGIC || rxHeader.readUInt16LE(4)!==VERSION ||
+           rxHeader.readUInt16LE(6)!==pending.operation || rxHeader.readUInt32LE(8)!==pending.sequence ||
+           rxHeader.readUInt32LE(20) || length>max) return fail(Error('Invalid bridge reply header'));
+        replyResult=rxHeader.readUInt32LE(16);
+        rxPayload=Buffer.allocUnsafe(length);payloadUsed=0;
+      }
+      const take=Math.min(rxPayload.length-payloadUsed,chunk.length-at);
+      chunk.copy(rxPayload,payloadUsed,at,at+take);payloadUsed+=take;at+=take;
+      if(payloadUsed<rxPayload.length) return;
+      if(at!==chunk.length) return fail(Error('Unexpected extra bridge reply data'));
+      const done=pending,payload=rxPayload,result=replyResult;
+      pending=null;rxPayload=null;headerUsed=0;payloadUsed=0;clearTimeout(done.timer);
+      if(result) {
+        const error=Error(`Bridge result 0x${result.toString(16)}${errors[result]?': '+errors[result]:''}`);
+        error.result=result;done.reject(error);
+      } else done.resolve(payload);
+    }
   });
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => { socket.destroy(); reject(Error('Bridge connection timed out')); }, timeout);
@@ -214,6 +226,33 @@ async function connect({host, port = 8090, timeout = 15000}) {
   }
   const bridge = {
     status: async () => JSON.parse((await request(operations.status)).toString('utf8')),
+    dump: (resource,destination,options) => require('./dump.cjs').dumpResource(bridge,resource,destination,options),
+    dumpSdFile: (remote,destination,options) => require('./dump.cjs').dumpSdFile(bridge,remote,destination,options),
+    transportStats: () => ({bytesRead:socket.bytesRead,bytesWritten:socket.bytesWritten}),
+    readInfo: async resource => {
+      const bytes=await request(operations.readInfo,words(id(resource)));
+      if(bytes.length!==16 || ![3,4].includes(bytes.readUInt32LE(8)) || bytes.readBigUInt64LE()>0x7fffffffffffffffn || (!bytes.readUInt32LE(12)||bytes.readUInt32LE(12)>MAX_BULK)) throw Error('Invalid bulk-read source info');
+      return {size:bytes.readBigUInt64LE(),kind:bytes.readUInt32LE(8)===3?'file':'storage',maxChunk:bytes.readUInt32LE(12)};
+    },
+    readBulk: async (resource,offset,size=MAX_BULK) => {
+      if(!Number.isInteger(size)||size<1||size>MAX_BULK) throw Error('Bulk read size must be 1..8388608');
+      const bytes=await request(operations.readBulk,Buffer.concat([words(id(resource),size),qwords(offset)]));
+      if(bytes.length>size) throw Error('Oversized bulk read');
+      return bytes;
+    },
+    readMemoryBulk: async (address,size) => {
+      if(!Number.isInteger(size)||size<1||size>MAX_BULK) throw Error('Bulk memory read size must be 1..8388608');
+      const bytes=await request(operations.readMemoryBulk,Buffer.concat([qwords(address),words(size)]));
+      if(bytes.length!==size) throw Error('Short bulk memory read');
+      return bytes;
+    },
+    networkRead: async size => {
+      if(!Number.isInteger(size)||size<1||size>MAX_BULK) throw Error('Network benchmark size must be 1..8388608');
+      const bytes=await request(operations.networkRead,words(size));
+      if(bytes.length!==size) throw Error('Short network benchmark read');
+      return bytes;
+    },
+
     symbols: async () => Object.fromEntries(Object.entries(JSON.parse((await request(operations.symbols)).toString('utf8'))).map(([name, address]) => [name, BigInt(address)])),
     syscallHints: async () => {
       const bytes = await request(operations.hints);
@@ -282,4 +321,4 @@ async function connect({host, port = 8090, timeout = 15000}) {
   return bridge;
 }
 
-module.exports = {connect, words, qwords, hex, attr, u32, u64, encodeIpc, decodeIpc, operations, MAGIC, VERSION, MAX_PACKET};
+module.exports = {connect, words, qwords, hex, attr, u32, u64, encodeIpc, decodeIpc, operations, MAGIC, VERSION, MAX_PACKET, MAX_BULK};

@@ -20,6 +20,7 @@ enum ResourceKind { Resource_Service = 1, Resource_Handle = 2, Resource_Buffer =
 typedef struct {
     u32 id, kind, parent;
     bool protected_identity;
+    u32 read_interface;
     Service service;
     Handle handle;
     void *buffer;
@@ -41,6 +42,9 @@ static HenStatus hen_status;
 static Result hen_result;
 static u64 requests_completed;
 static u64 last_ui_tick;
+static bool ui_dirty=true, bulk_zero;
+static u8 *bulk_allocation, *bulk_data;
+static int send_buffer_bytes, receive_buffer_bytes;
 
 static bool update_ui(void) {
     // Keep network progress independent of the console renderer's frame wait.
@@ -51,7 +55,7 @@ static bool update_ui(void) {
     if (!appletMainLoop()) running = false;
     padUpdate(&pad);
     if (padGetButtonsDown(&pad) & HidNpadButton_Plus) running = false;
-    consoleUpdate(NULL);
+    if (ui_dirty) { consoleUpdate(NULL); ui_dirty=false; }
     return running;
 }
 
@@ -80,13 +84,15 @@ static bool send_exact(int fd, const void *data, size_t size) {
     u64 last_progress = armGetSystemTick();
     while (size && update_ui()) {
         if (armTicksToNs(armGetSystemTick() - last_progress) / 1000000 > 15000) return false;
-        struct pollfd event = {.fd = fd, .events = POLLOUT};
-        int ready = poll(&event, 1, 100);
-        if (ready < 0) { if (errno == EINTR) continue; return false; }
-        if (!ready) continue;
-        if (event.revents & (POLLERR | POLLHUP | POLLNVAL)) return false;
         ssize_t count = send(fd, position, size, 0);
-        if (count < 0 && (errno == EINTR || errno == EAGAIN)) continue;
+        if (count<0 && errno==EINTR) continue;
+        if (count<0 && (errno==EAGAIN || errno==EWOULDBLOCK)) {
+            struct pollfd event={.fd=fd,.events=POLLOUT};
+            int ready=poll(&event,1,100);
+            if (ready<0 && errno!=EINTR) return false;
+            if (ready>0 && (event.revents&(POLLERR|POLLHUP|POLLNVAL))) return false;
+            continue;
+        }
         if (count <= 0) return false;
         position += count;
         size -= (size_t)count;
@@ -95,9 +101,7 @@ static bool send_exact(int fd, const void *data, size_t size) {
     return size == 0;
 }
 
-static bool answer(int fd, const u8 *request, Result result, size_t size) {
-    if (size > HCB_MAX_PACKET) return false;
-    u8 *header = response_frame.header;
+static void make_header(u8 *header, const u8 *request, Result result, size_t size) {
     memset(header, 0, HCB_HEADER_SIZE);
     hcb_put32(header, HCB_MAGIC);
     header[4] = HCB_VERSION;
@@ -105,6 +109,10 @@ static bool answer(int fd, const u8 *request, Result result, size_t size) {
     hcb_put32(header + 8, hcb_u32(request + 8));
     hcb_put32(header + 12, (u32)size);
     hcb_put32(header + 16, result);
+}
+static bool answer(int fd, const u8 *request, Result result, size_t size) {
+    if (size > HCB_MAX_PACKET) return false;
+    make_header(response_frame.header,request,result,size);
     return send_exact(fd, &response_frame, HCB_HEADER_SIZE + size);
 }
 
@@ -194,7 +202,7 @@ static Result acquire_hen_resource(const char *name, Resource *out) {
     if (R_FAILED(rc)) return rc;
     if (!strcmp(name, "hen")) { out->service = hen; return 0; }
     Handle handle = INVALID_HANDLE;
-    if (!strcmp(name, "fs")) { rc = henGetFilesystemRoot(&hen, &handle); out->protected_identity = true; }
+    if (!strcmp(name, "fs")) { rc = henGetFilesystemRoot(&hen, &handle); out->protected_identity = true; out->read_interface=Hcb_FspRoot; }
     else if (!strcmp(name, "settings")) rc = henGetSettingsSession(&hen, &handle);
     else if (!strcmp(name, "process")) { rc = henGetProcessHandle(&hen, &handle); out->kind = Resource_Handle; }
     else if (!strcmp(name, "sm")) rc = henGetServiceManager(&hen, &handle);
@@ -349,6 +357,7 @@ static Result ipc_request(size_t size, size_t *reply_size) {
     for (u32 i = 0; i < object_count; i++) {
         Resource *r = new_resource(Resource_Service);
         r->service = output_objects[i];
+        r->read_interface=hcb_opened_interface(target->read_interface,p.command,p.input,p.input_size,p.output_object_count);
         if (domain) r->parent = target->id;
         describe_resource(response_data + at, r); at += 32;
     }
@@ -374,24 +383,41 @@ static bool get_name(char *out, size_t capacity, size_t size) {
     for (size_t i = 0; i < size; i++) if ((u8)out[i] < 33 || (u8)out[i] > 126) return false;
     return true;
 }
+static Result readable_size(Resource *r, u64 *out) {
+    if (!r || r->kind!=Resource_Service) return HCB_BAD_RESOURCE;
+    s64 size=0; Result rc;
+    if (r->read_interface==Hcb_ReadFile) { FsFile f={.s=r->service}; rc=fsFileGetSize(&f,&size); }
+    else if (r->read_interface==Hcb_Storage) { FsStorage s={.s=r->service}; rc=fsStorageGetSize(&s,&size); }
+    else return HCB_INTERFACE;
+    if (R_SUCCEEDED(rc) && size<0) return HCB_BAD_REPLY;
+    if (R_SUCCEEDED(rc)) *out=(u64)size;
+    return rc;
+}
 
 static Result process_request(u16 operation, size_t size, size_t *reply_size) {
     *reply_size = 0;
+    if (operation==Hcb_ReadInfo && size==4) {
+        Resource *r=lookup(hcb_u32(request_data)); u64 length=0;
+        Result rc=readable_size(r,&length);
+        if (R_SUCCEEDED(rc)) { hcb_put64(response_data,length); hcb_put32(response_data+8,r->read_interface); hcb_put32(response_data+12,HCB_MAX_BULK); *reply_size=16; }
+        return rc;
+    }
     if (operation == Hcb_Ipc) return ipc_request(size, reply_size);
     if (operation == Hcb_Status && !size) {
         u64 pid = 0, program = 0;
         Result pid_rc = svcGetProcessId(&pid, CUR_PROCESS_HANDLE);
         Result program_rc = svcGetInfo(&program, InfoType_ProgramId, CUR_PROCESS_HANDLE, 0);
         int count = snprintf((char *)response_data, sizeof(response_data),
-            "{\"version\":\"0.2.1\",\"henResult\":%u,\"henProtocol\":%u,"
+            "{\"version\":\"0.3.0\",\"henResult\":%u,\"henProtocol\":%u,"
             "\"henPid\":\"0x%lx\",\"henInitializationResult\":%u,\"processId\":\"0x%lx\","
             "\"processResult\":%u,\"programId\":\"0x%016lx\",\"programResult\":%u,"
             "\"runtimeHosVersion\":%u,\"resources\":%u,\"allocatedBytes\":%zu,\"requestsCompleted\":%lu,"
-            "\"memoryScope\":\"bridge process\",\"authentication\":\"none\",\"maxPacket\":%u,\"port\":%u}",
+            "\"memoryScope\":\"bridge process\",\"authentication\":\"none\",\"maxPacket\":%u,\"port\":%u,"
+            "\"maxBulkRead\":%u,\"sendBufferBytes\":%d,\"receiveBufferBytes\":%d,\"bulkScratchBytes\":%u}",
             hen_result, hen_status.protocol_version, hen_status.process_id,
             hen_status.initialization_result, pid, pid_rc, program, program_rc,
             hosversionGet(), RESOURCE_LIMIT - available_slots(), allocated, requests_completed,
-            HCB_MAX_PACKET, BRIDGE_PORT);
+            HCB_MAX_PACKET, BRIDGE_PORT,HCB_MAX_BULK,send_buffer_bytes,receive_buffer_bytes,bulk_allocation ? HCB_MAX_BULK+4096 : 0);
         if (count < 0 || (size_t)count >= sizeof(response_data)) return HCB_LIMIT;
         *reply_size = (size_t)count; return 0;
     }
@@ -501,6 +527,7 @@ static Result process_request(u16 operation, size_t size, size_t *reply_size) {
         Result rc = serviceClone(&r->service, &copy->service);
         if (R_FAILED(rc)) { memset(copy, 0, sizeof(*copy)); return rc; }
         copy->protected_identity = r->protected_identity;
+        copy->read_interface = r->read_interface;
         describe_resource(response_data, copy); *reply_size = 32; return 0;
     }
     if (operation == Hcb_Jit) {
@@ -533,8 +560,53 @@ static Result process_request(u16 operation, size_t size, size_t *reply_size) {
     return HCB_BAD_REQUEST;
 }
 
+static bool bulk_answer(int fd, const u8 *header, u16 operation, size_t size) {
+    Result rc=0; size_t reply_size=0;
+    if ((operation==Hcb_ReadBulk && size!=16) || (operation==Hcb_ReadMemoryBulk && size!=12) || (operation==Hcb_NetworkRead && size!=4))
+        return answer(fd,header,HCB_BAD_REQUEST,0);
+    u32 length=operation==Hcb_ReadBulk ? hcb_u32(request_data+4) : operation==Hcb_ReadMemoryBulk ? hcb_u32(request_data+8) : hcb_u32(request_data);
+    if (!length || length>HCB_MAX_BULK) return answer(fd,header,HCB_LIMIT,0);
+    if (!bulk_allocation) {
+        bulk_allocation=memalign(4096,HCB_MAX_BULK+4096);
+        if (!bulk_allocation) return answer(fd,header,HCB_LIMIT,0);
+        bulk_data=bulk_allocation+4096;
+    }
+    if (operation==Hcb_NetworkRead) {
+        if (!bulk_zero) { memset(bulk_data,0,HCB_MAX_BULK); bulk_zero=true; }
+        reply_size=length;
+    } else if (operation==Hcb_ReadMemoryBulk) {
+        u64 address=hcb_u64(request_data);
+        rc=memory_range(address,length,Perm_R);
+        if (R_SUCCEEDED(rc)) { bulk_zero=false; memmove(bulk_data,(void *)(uintptr_t)address,length); reply_size=length; }
+    } else {
+        Resource *r=lookup(hcb_u32(request_data)); u64 offset=hcb_u64(request_data+8),total=0;
+        rc=readable_size(r,&total);
+        if (R_SUCCEEDED(rc) && !hcb_bulk_range(offset,length,total)) rc=HCB_BAD_RANGE;
+        if (R_SUCCEEDED(rc)) {
+            u64 requested=total-offset<length ? total-offset : length;
+            u64 got=0;
+            if (requested) {
+                bulk_zero=false;
+                if (r->read_interface==Hcb_ReadFile) {
+                    FsFile file={.s=r->service}; rc=fsFileRead(&file,(s64)offset,bulk_data,requested,0,&got);
+                    if (R_SUCCEEDED(rc) && got>requested) rc=HCB_BAD_REPLY;
+                } else {
+                    FsStorage storage={.s=r->service};rc=fsStorageRead(&storage,(s64)offset,bulk_data,requested);
+                    if (R_SUCCEEDED(rc)) got=requested;
+                }
+            }
+            if (R_SUCCEEDED(rc)) reply_size=(size_t)got;
+        }
+    }
+    if (R_FAILED(rc)) return answer(fd,header,rc,0);
+    u8 *wire=bulk_data-HCB_HEADER_SIZE;
+    make_header(wire,header,0,reply_size);
+    return send_exact(fd,wire,HCB_HEADER_SIZE+reply_size);
+}
+
 static void serve_client(int fd) {
     printf("LAN client connected.\n");
+    ui_dirty=true;
     while (running) {
         u8 header[HCB_HEADER_SIZE];
         if (!receive_exact(fd, header, sizeof(header), 300000)) break;
@@ -542,6 +614,11 @@ static void serve_client(int fd) {
         u16 operation = header[6] | (u16)header[7] << 8;
         size_t size = hcb_u32(header + 12);
         if (size && !receive_exact(fd, request_data, size, 15000)) break;
+        if (operation==Hcb_ReadBulk || operation==Hcb_ReadMemoryBulk || operation==Hcb_NetworkRead) {
+            requests_completed++;
+            if (!bulk_answer(fd,header,operation,size)) break;
+            continue;
+        }
         size_t reply_size = 0;
         Result rc = process_request(operation, size, &reply_size);
         requests_completed++;
@@ -549,6 +626,7 @@ static void serve_client(int fd) {
     }
     if (!release_all()) running = false;
     printf("Client disconnected. Completed %lu requests.\n", requests_completed);
+    ui_dirty=true;
 }
 
 int main(int argc, char **argv) {
@@ -556,12 +634,15 @@ int main(int argc, char **argv) {
     consoleInit(NULL);
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     padInitializeDefault(&pad);
-    printf("HEN command bridge 0.2.1\n\n");
+    printf("HEN command bridge 0.3.0\n\n");
     Service hen;
     hen_result = open_hen(&hen);
     if (R_SUCCEEDED(hen_result)) { hen_result = henGetStatus(&hen, &hen_status); serviceClose(&hen); }
     printf("HEN protocol %u, status 0x%x\n", hen_status.protocol_version, hen_result);
-    Result rc = socketInitializeDefault();
+    SocketInitConfig network=*socketGetDefaultInitConfig();
+    network.tcp_tx_buf_size=1024*1024; network.tcp_rx_buf_size=256*1024;
+    network.tcp_tx_buf_max_size=2*1024*1024; network.tcp_rx_buf_max_size=1024*1024;
+    Result rc = socketInitialize(&network);
     if (R_FAILED(rc)) { printf("Network initialization failed 0x%x\n", rc); goto finish; }
     int listener = socket(AF_INET, SOCK_STREAM, 0);
     int one = 1;
@@ -586,6 +667,13 @@ int main(int argc, char **argv) {
         if (setsockopt(client, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one)) < 0) {
             printf("Could not enable low-latency TCP, errno %d\n", errno);
         }
+        int tx=1024*1024,rx=256*1024;
+        setsockopt(client,SOL_SOCKET,SO_SNDBUF,&tx,sizeof(tx));
+        setsockopt(client,SOL_SOCKET,SO_RCVBUF,&rx,sizeof(rx));
+        socklen_t option_size=sizeof(send_buffer_bytes);
+        getsockopt(client,SOL_SOCKET,SO_SNDBUF,&send_buffer_bytes,&option_size);
+        option_size=sizeof(receive_buffer_bytes);
+        getsockopt(client,SOL_SOCKET,SO_RCVBUF,&receive_buffer_bytes,&option_size);
         int flags = fcntl(client, F_GETFL, 0);
         if (flags < 0 || fcntl(client, F_SETFL, flags | O_NONBLOCK) < 0) { close(client); continue; }
         serve_client(client);
@@ -593,6 +681,7 @@ int main(int argc, char **argv) {
     }
     close(listener);
     socketExit();
+    free(bulk_allocation);
     consoleExit(NULL);
     return 0;
 finish:

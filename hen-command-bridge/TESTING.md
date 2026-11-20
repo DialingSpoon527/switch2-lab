@@ -1,69 +1,46 @@
-# Observed use of 0.2.1
+# Observed use of 0.3.0
 
-These are observations from one console and one PC on November 18, 2026.
-They are not compatibility, safety, or performance guarantees.
+The maintainer launched the exact NRO through hbmenu on November 19, 2026,
+after starting kaiHEN. The bridge reported HEN protocol 7 and initialization
+result 0. The reported console firmware was 23.0.1. The PC used Windows and
+Node.js 24.13.1. devkitA64 GCC 16.1.0 built the NRO.
 
-The maintainer confirmed launching version 0.2.1 through hbmenu after a completed
-kaiHEN launch. The bridge reported HEN protocol 7 and initialization result 0.
-Console firmware was reported as 23.0.1; the loader's `runtimeHosVersion` field
-is not independent firmware verification. The PC used Windows and Node.js
-v24.13.1. The compiler was devkitA64 GCC 16.1.0.
+| Test on one console and LAN | MiB/s |
+| --- | ---: |
+| Generic IPC reads of a synthetic 64 MiB SD file | 11.84 |
+| Bulk reads of the same SD file | 24.96 |
+| Bulk copy of the same file to PC with SHA-256 | 24.12 |
+| Network-only transfer of a zeroed buffer | 36.28 |
 
-## Console observations
+Checksums matched for the PC copy and for a separate readback of the NRO.
+The SD benchmark file was removed after the test. Later use copied 146 game
+save entries across 80 application IDs to a PC using read-only save handles
+and bulk file reads. The 6,577 copied files were checked against the received
+bytes using SHA-256. No restore was attempted.
 
-- HEN status through generic IPC succeeded.
-- A temporary allocation accepted test bytes and returned matching bytes.
-- A JIT function adding two integers returned 42.
-- Read-only SD hash verification succeeded for 274 files totaling 4,274,428
-  bytes, taking 2.65 seconds. Their upload had used the earlier 0.2.0 build;
-  that upload is not evidence of write behavior in 0.2.1.
-- Two old bridge NROs were removed from their exact SD directories after their
-  contents matched locally retained builds. Only empty directories were then
-  removed. The current build's SD file matched its original hash afterward.
-- The smoke checks and file-verification connections ended with zero remaining
-  resources reported by the bridge.
+Rates describe the measured setup. Installed-content IStorage reads were
+not tested on hardware. Other firmware, HEN versions, hosts, concurrent
+clients, recovery behavior, and long-running use were not evaluated. Generic
+IPC and native calls retain the ability to modify persistent storage.
 
-For 40 small status requests, median latency changed from 61.98 ms on version
-0.2.0 to 1.19 ms on 0.2.1. Reading 1 MiB from an owned RAM buffer in 64 KiB
-chunks changed from 0.757 to 15.64 MiB/s. These are short measurements on the
-same LAN, with no network isolation or long-duration stress test. The RAM result
-is not a filesystem write-throughput measurement.
+## Offline checks
 
-## Offline observations
-
-The C layout test checked 5,664 accepted layouts against the installed SDK
-serializer, rejected 386 oversized layouts, and rejected 13,950 invalid domain
-layouts. All seven Node.js client tests passed, including fragmented replies,
-timeouts without retries, request IDs, IPC results, and 64-bit addresses.
-
-The build/test wrappers accept external SDK and toolchain paths. On the test
-PC, the Windows wrapper built an NRO successfully and the test wrapper passed
-the same layout checks and all seven Node.js tests. No console was contacted
-by those build/test steps.
-A cross build does not establish that its new output binary was tested on the
-console, even when its C sources match a previously tested build.
+The C test checked 5,664 accepted and 386 oversized IPC layouts against the
+SDK serializer and rejected 13,950 invalid layouts. It also checked file
+interface and range restrictions. Twelve Node.js tests passed, including
+fragmented bulk replies, checksum handling, and partial-copy behavior.
 
 ## Tested source identity
 
-The published runtime and client files are byte-identical to the tested 0.2.1
-sources. Their SHA-256 hashes are:
-
 | File | SHA-256 |
 | --- | --- |
-| `main.c` | `995a71ede5b1cb642dd212e1ea7805b1d87233bd599c464144eb45ad1b529e27` |
-| `protocol.h` | `50cf389f643a5b05978ce27145512543f63dac9ab02a93433ad5027a599bc57a` |
-| `client.cjs` | `0ec5599f0f5a0c3f1c975e899992b196ad3524cee956a05286bb69d88053a72d` |
-| `cli.cjs` | `42e41bc359713795770340fb9b6a43c100ff9180ad877068acb3e277c0ad1b82` |
+| `main.c` | `1b0dbabfbf8f7b9e29f037f4bafae46b7a6b2939e98440a0dce69b934fb79081` |
+| `protocol.h` | `73aa083112a8eb0059cdb833335cea32cba67d63092a1a2e550f8b059b7365e1` |
+| `client.cjs` | `28e8c6e0b92fc0af31b842ce327bad0164080d7de8218acb507019749787a557` |
+| `cli.cjs` | `21f8597f5809ea38ad091d99837165b90b27b5d1d1b66f3162c7455a38af85a9` |
+| `dump.cjs` | `32129872c61db723b5e1cbea2a307f08db2b3addca6ea6dd3ba36e1504b34d25` |
 
-The original locally tested NRO had SHA-256
-`a7a9d2f0fe9ef5183621fbc2e8297fa8ac0a09d945aa8fb9205fc2c9d489cfb2`.
-That exact build is included as [hen-command-bridge.nro](hen-command-bridge.nro). Debug paths, build location, and toolchain changes
-can make another build differ; matching version text alone is insufficient.
-
-## Limits of the observations
-
-One console, firmware report, HEN protocol, and LAN were exercised. Other
-firmware, HEN versions, hosts, concurrent clients, recovery paths, and long-term
-behavior were not established. The tests did not establish ban safety or safe
-use of arbitrary IPC/native commands. Invalid service operations can still
-cause persistent damage despite passing the protocol checks.
+The included [NRO](hen-command-bridge.nro) is the same 419,476-byte file used
+on the console. Its SHA-256 is `109d1cac781125f77732ad104f3214949caf7dbc5ef76e7f8e22aab7b6239102`. See the
+[third-party notices](NRO-NOTICES.md). A fresh build has its own binary hash
+and needs its own hardware test.

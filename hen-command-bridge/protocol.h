@@ -13,6 +13,7 @@
 #define HCB_MAX_BUFFER (256 * 1024)
 #define HCB_MAX_INLINE 128
 #define HCB_MAX_ITEMS 4
+#define HCB_MAX_BULK (8 * 1024 * 1024)
 #define HCB_BAD_REQUEST UINT32_C(0xf0010001)
 #define HCB_BAD_RESOURCE UINT32_C(0xf0010003)
 #define HCB_LIMIT UINT32_C(0xf0010004)
@@ -20,6 +21,7 @@
 #define HCB_BAD_RANGE UINT32_C(0xf0010006)
 #define HCB_BAD_REPLY UINT32_C(0xf0010007)
 #define HCB_IDENTITY UINT32_C(0xf0010008)
+#define HCB_INTERFACE UINT32_C(0xf0010009)
 
 enum HcbOperation {
     Hcb_Status = 2, Hcb_GetInfo = 3,
@@ -27,8 +29,10 @@ enum HcbOperation {
     Hcb_WriteAllocation = 7, Hcb_Close = 8, Hcb_Resources = 9,
     Hcb_OpenService = 10, Hcb_CloneService = 11, Hcb_Domain = 12,
     Hcb_Ipc = 13, Hcb_HandleToService = 14, Hcb_HenResource = 15,
-    Hcb_Jit = 16, Hcb_Call = 17, Hcb_Symbols = 18, Hcb_SyscallHints = 19
+    Hcb_Jit = 16, Hcb_Call = 17, Hcb_Symbols = 18, Hcb_SyscallHints = 19,
+    Hcb_ReadBulk = 20, Hcb_ReadInfo = 21, Hcb_ReadMemoryBulk = 22, Hcb_NetworkRead = 23
 };
+enum HcbInterface { Hcb_Unknown=0, Hcb_FspRoot=1, Hcb_FileSystem=2, Hcb_ReadFile=3, Hcb_Storage=4 };
 
 typedef struct { const uint8_t *data; size_t size, at; } HcbReader;
 typedef struct {
@@ -49,6 +53,19 @@ static inline uint32_t hcb_u32(const void *data) {
 static inline uint64_t hcb_u64(const void *data) {
     const uint8_t *p = data;
     return hcb_u32(p) | (uint64_t)hcb_u32(p + 4) << 32;
+}
+static inline uint32_t hcb_opened_interface(uint32_t parent, uint32_t command, const uint8_t *input, size_t size, uint32_t objects) {
+    if (objects!=1) return Hcb_Unknown;
+    if (parent==Hcb_FspRoot) {
+        if ((command==18 && !size) || (command==11 && size==4) || ((command==51 || command==53) && size==72)) return Hcb_FileSystem;
+        if ((command==12 && size==4) || ((command==200 || command==203) && !size) ||
+            (command==201 && size==8) || (command==202 && size==16)) return Hcb_Storage;
+    }
+    if (parent==Hcb_FileSystem && command==8 && size==4 && input && hcb_u32(input)==1) return Hcb_ReadFile;
+    return Hcb_Unknown;
+}
+static inline bool hcb_bulk_range(uint64_t offset, uint32_t length, uint64_t size) {
+    return length>0 && length<=HCB_MAX_BULK && size<=INT64_MAX && offset<=size && offset<=INT64_MAX;
 }
 static inline void hcb_put32(void *data, uint32_t value) {
     uint8_t *p = data;

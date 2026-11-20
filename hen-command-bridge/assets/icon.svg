@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>HEN command bridge: terminal and network ports</title>
+  <rect width="256" height="256" rx="44" fill="#182035"/>
+  <rect x="27" y="34" width="202" height="132" rx="16" fill="#7165d6"/>
+  <rect x="37" y="62" width="182" height="94" rx="7" fill="#10172a"/>
+  <circle cx="45" cy="48" r="4" fill="#ddd8ff"/>
+  <circle cx="60" cy="48" r="4" fill="#ddd8ff"/>
+  <path d="m58 88 25 20-25 20m40 0h28" fill="none" stroke="#f0f1ff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m150 90 17 18-17 18m29-36 17 18-17 18" fill="none" stroke="#52d8d0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M128 166v26M61 207v-15h134v15" fill="none" stroke="#a49af3" stroke-width="10" stroke-linejoin="round"/>
+  <rect x="35" y="204" width="52" height="27" rx="7" fill="#52d8d0"/>
+  <rect x="169" y="204" width="52" height="27" rx="7" fill="#52d8d0"/>
+  <path d="M47 219h28m106 0h28" stroke="#182035" stroke-width="5" stroke-linecap="round"/>
+</svg>

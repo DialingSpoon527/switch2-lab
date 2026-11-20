@@ -18,6 +18,7 @@ function help() {
 Usage: node cli.cjs --host ADDRESS COMMAND [arguments]
 The NRO must be open. Connects directly over your LAN.
 
+  dump-sd REMOTE NEW_FILE         Dump an SD file using bulk reads and SHA-256
   status                         Show bridge and HEN status
   hints                          Show available syscall hints
   symbols                        Show callable native wrapper addresses
@@ -59,13 +60,16 @@ async function main(args) {
     script = require(path.resolve(args.shift()));
     if (typeof script !== 'function') throw Error('Script must export an async function');
   }
-  const allowed = ['status', 'hints', 'symbols', 'query', 'maps', 'read', 'get-info', 'ipc', 'script', 'repl'];
+  const allowed = ['dump-sd', 'status', 'hints', 'symbols', 'query', 'maps', 'read', 'get-info', 'ipc', 'script', 'repl'];
   if (!allowed.includes(command)) throw Error('Unknown command ' + command);
   const bridge = await helpers.connect(options);
   const interrupt = () => { bridge.abort(); process.exitCode = 130; };
   process.on('SIGINT', interrupt);
   try {
-    if (command === 'status') print(await bridge.status());
+    if (command === 'dump-sd') {
+      if(args.length!==2) throw Error('dump-sd requires an absolute SD path and a new PC filename');
+      print(await bridge.dumpSdFile(args[0],args[1]));
+    } else if (command === 'status') print(await bridge.status());
     else if (command === 'hints') print((await bridge.syscallHints()).map(value => '0x' + value.toString(16)));
     else if (command === 'symbols') print(await bridge.symbols());
     else if (command === 'query') {

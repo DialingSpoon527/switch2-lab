@@ -12,5 +12,5 @@ $env:ZIG_LOCAL_CACHE_DIR = Join-Path $output 'zig-cache'
 if ($LASTEXITCODE) { throw 'Protocol host-test compilation failed' }
 & "$output/protocol.test.exe"
 if ($LASTEXITCODE) { throw 'Protocol host tests failed' }
-& node --test "$PSScriptRoot/client.test.cjs"
+& node --test "$PSScriptRoot/client.test.cjs" "$PSScriptRoot/dump.test.cjs"
 if ($LASTEXITCODE) { throw 'PC client tests failed' }
