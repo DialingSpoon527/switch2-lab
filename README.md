@@ -40,8 +40,8 @@ Everything is provided as-is, with no guarantee of function or support.
 
 | Project | What it does | Observed use |
 | --- | --- | --- |
-| [HEN command bridge](projects/hen-command-bridge/) | PC command access to a running kaiHEN homebrew session. | Version 0.2.1 used for service commands, file operations, and native-call checks on one console. |
-| [Seedsow FS cleanup](projects/seedsow-fs-cleaner/) | Removes recognized FS-attempt scratch folders from a selected Seedsow save after a verified SD copy of retained files. | Maintainer confirmed version 0.1.2 worked on their console. |
+| [HEN command bridge](hen-command-bridge/) · [NRO](hen-command-bridge/hen-command-bridge.nro) | PC command access to a running kaiHEN homebrew session. | Version 0.2.1 used for service commands, file operations, and native-call checks on one console. |
+| [Seedsow FS cleanup](seedsow-fs-cleaner/) · [NRO](seedsow-fs-cleaner/seedsow-fs-cleaner.nro) | Removes recognized FS-attempt scratch folders from a selected Seedsow save after a verified SD copy of retained files. | Maintainer confirmed version 0.1.2 worked on their console. |
 
 ## Licensing
 

@@ -95,12 +95,14 @@ an ounce-devkit layout with libounce and libkaihen:
 ```
 
 The NRO and its build manifest are written under `build/`. Fresh builds are
-marked untested. No SDK, compiled NRO, or console data is included here.
+marked untested. The included [seedsow-fs-cleaner.nro](seedsow-fs-cleaner.nro)
+is the maintainer-confirmed 0.1.2 build. SDK components and console data are not
+included.
 
 The primary icon is [hand-written SVG](assets/icon.svg). `render-icon.py` uses
 CairoSVG and Pillow to regenerate the JPEG required by the NRO format; the
 pre-rendered JPEG is included. [Dependencies and notices](DEPENDENCIES.md).
 
-Original work follows the repository's [Unlicense](../../UNLICENSE). The C
+Original work follows the repository's [Unlicense](../UNLICENSE). The C
 implementation was written with AI assistance; the icon was authored as SVG
 without image diffusion. Dependency rights and notices remain separate.

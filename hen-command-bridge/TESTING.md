@@ -57,7 +57,7 @@ sources. Their SHA-256 hashes are:
 
 The original locally tested NRO had SHA-256
 `a7a9d2f0fe9ef5183621fbc2e8297fa8ac0a09d945aa8fb9205fc2c9d489cfb2`.
-It is not distributed here. Debug paths, build location, and toolchain changes
+That exact build is included as [hen-command-bridge.nro](hen-command-bridge.nro). Debug paths, build location, and toolchain changes
 can make another build differ; matching version text alone is insufficient.
 
 ## Limits of the observations

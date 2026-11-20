@@ -66,3 +66,7 @@ zig-out/
 .vscode/
 Thumbs.db
 .DS_Store
+
+# Individually reviewed, maintainer-tested binaries.
+!/hen-command-bridge/hen-command-bridge.nro
+!/seedsow-fs-cleaner/seedsow-fs-cleaner.nro

@@ -1,8 +1,8 @@
 # Dependencies and source references
 
-This directory contains the bridge's original implementation and generated icon.
-SDK headers, libraries, upstream source trees, compiler binaries, and console
-inputs are not bundled. The host layout test calls the installed SDK's CMIF
+This directory contains the bridge implementation, icon, and tested NRO.
+SDK headers, library archives, upstream source trees, compiler binaries, and
+console inputs are not separately bundled. The NRO contains linked runtime code. The host layout test calls the installed SDK's CMIF
 serializer instead of embedding a copy of that implementation.
 
 | Dependency | Use | Reference |
@@ -36,3 +36,10 @@ The ounce-devkit build/install project has its own MIT license. Other components
 in a developer's toolchain retain their own licenses. The repository Unlicense
 applies to original work here and does not relicense those dependencies or their
 contributions to a built executable.
+
+## Included NRO
+
+The exact maintainer-tested executable is included in this directory.
+[NRO notices](NRO-NOTICES.md) identify it and retain the SDK, C-library, and
+compiler-runtime notices. The repository Unlicense does not waive those
+third-party rights.

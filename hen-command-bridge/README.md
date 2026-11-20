@@ -42,7 +42,8 @@ From this directory, with paths to your own installations:
 
 The output is `build/hen-command-bridge.nro`; `build/manifest.json` records
 source, dependency, and output hashes. A fresh build is marked untested until
-its own console test. Binaries and SDK components are not included here.
+its own console test. The included [hen-command-bridge.nro](hen-command-bridge.nro)
+is the maintainer-tested 0.2.1 build; SDK components are separate.
 
 With HEN already running, copy the NRO to its own directory under `/switch/`
 on SD, verify the transfer, and launch it through hbmenu. While it is open:
@@ -127,5 +128,5 @@ The [test notes](TESTING.md) distinguish those checks from actual console use.
 
 The bridge implementation, client, tests, and scripts were written for this
 project with AI assistance. The icon is an original generated asset. Original
-work follows the repository's [Unlicense](../../UNLICENSE); dependency licenses
+work follows the repository's [Unlicense](../UNLICENSE); dependency licenses
 and notices remain separate in [DEPENDENCIES.md](DEPENDENCIES.md).

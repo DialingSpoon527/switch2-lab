@@ -27,6 +27,14 @@ top-level project license. Notices supplied with the SDK libraries are retained:
 - [libnx ISC](licenses/libnx-ISC.txt)
 - [mimalloc MIT](licenses/mimalloc-MIT.txt)
 
-SDK source, headers, libraries, and toolchain executables are not bundled.
+SDK source, headers, library archives, and toolchain executables are not
+separately bundled. The NRO contains linked runtime code.
 Original work follows the repository Unlicense; dependency licenses and any
 contributions they make to a built executable retain their own terms.
+
+## Included NRO
+
+The exact maintainer-tested executable is included in this directory.
+[NRO notices](NRO-NOTICES.md) identify it and retain the SDK, C-library, and
+compiler-runtime notices. The repository Unlicense does not waive those
+third-party rights.

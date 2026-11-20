@@ -47,7 +47,7 @@ cross-built executable has not thereby been console-tested.
 
 The original confirmed NRO SHA-256 was
 `86b0400149d07fb4f0aef6aaeeda77cc9bb460a090f8f9aedc103c1aab139429`.
-It is not distributed here. The runtime C files and headers match that build's
+That exact build is included as [seedsow-fs-cleaner.nro](seedsow-fs-cleaner.nro). The runtime C files and headers match that build's
 recorded sources. Test timestamps were replaced with synthetic fixture values;
 build/test wrappers accept external toolchain paths.
 
