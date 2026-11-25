@@ -42,6 +42,7 @@ Everything is provided as-is, with no guarantee of function or support.
 | --- | --- | --- |
 | [HEN command bridge](hen-command-bridge/) · [NRO](hen-command-bridge/hen-command-bridge.nro) | PC command access to a running kaiHEN homebrew session. | Version 0.3.0 used for verified bulk reads and game save backups on one console. |
 | [Seedsow FS cleanup](seedsow-fs-cleaner/) · [NRO](seedsow-fs-cleaner/seedsow-fs-cleaner.nro) | Removes recognized FS-attempt scratch folders from a selected Seedsow save after a verified SD copy of retained files. | Maintainer confirmed version 0.1.2 worked on their console. |
+| [HEN-only updater](hen-updater/) · [NRO](hen-updater/hen-updater.nro) | Replaces compatible HEN processes while retaining RO and the supervisor; includes source-build and porting helpers. | Initial startup, dry run and one same-build live handoff passed on one console. |
 
 ## Licensing
 
@@ -54,3 +55,5 @@ You are welcome to copy, modify, reuse, package, sell, or build on that work.
 Third-party code and dependencies retain their own licenses and any required
 notices. This dedication covers only rights I can grant; it does not claim
 ownership of anyone else's work or override their terms.
+
+The [HEN-only updater](hen-updater/) is a GPL-2.0-only kaiHEN derivative with separately licensed components. Its own licenses and notices apply.

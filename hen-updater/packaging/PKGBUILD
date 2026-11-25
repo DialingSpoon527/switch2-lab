@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: ISC
+#
+# libkaihen's pacman package, for devkitPro's pacman (dkp-pacman): kaiHEN's
+# homebrew API (kaihen.h, the JIT provider and the plugin runtime). Dockerfile
+# builds it with dkp-makepkg against libounce's package:
+#   LIBKAIHEN_VERSION=20261118 dkp-makepkg
+# It installs what libkaihen's `make install` installs into
+# $DEVKITPRO/portlibs/switch2.
+
+pkgname=libkaihen
+pkgver=${LIBKAIHEN_VERSION:?set LIBKAIHEN_VERSION to the release version}
+pkgrel=1
+pkgdesc="kaiHEN's homebrew API for Switch 2: HEN sessions, JIT and plugins"
+arch=('any')
+url='https://github.com/ouncebrew/kaihen'
+license=('ISC')
+groups=('ounce-devkit')
+depends=('libounce')
+makedepends=('devkitA64')
+# Static AArch64 archives: the host's strip must not touch them.
+options=(!strip staticlibs)
+
+prepare() {
+    rm -rf "$srcdir/libkaihen"
+    cp -r "$startdir/../libkaihen" "$srcdir/libkaihen"
+}
+
+build() {
+    make -C "$srcdir/libkaihen" -j"$(nproc)"
+}
+
+package() {
+    make -C "$srcdir/libkaihen" install PORTLIB="$pkgdir/opt/devkitpro/portlibs/switch2"
+}

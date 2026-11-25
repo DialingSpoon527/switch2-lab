@@ -1,0 +1,12 @@
+{
+  "upstream_label": "20261123",
+  "upstream_revision": "3b23b5dc6e75539855eca69ffdda371ce69631bb",
+  "upstream_repository": "https://github.com/ouncebrew/kaihen",
+  "upstream_source_zip_sha256": "44fc7c3ee3ccb5725c18058f851bf1b3bd127c3f038e2a31618238ba6cf94d4b",
+  "official_zip_url": "https://github.com/ouncebrew/kaihen/releases/download/20261123/kaiHEN-20261123.zip",
+  "official_zip_sha256": "24c0e68125817ab751f96985af63347a4e8bec7aced37f713b3fbb3d0eb4680c",
+  "input_updater_zip_sha256": "c308957a14a8aea25c1e3f59a45d0e0d091698dd3c0f8615c50b2a279b433097",
+  "deferred_protocol": 5,
+  "review_required": false,
+  "hardware_tested": false
+}

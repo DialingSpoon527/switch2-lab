@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: ISC
+#
+# Pushing a version tag builds kaiHEN-VERSION.zip and libkaihen's pacman
+# package and publishes them as that tag's GitHub release. The tag is the version (20261118, or 20261118.1 for
+# another release on the same day); the annotated tag's message begins the
+# release notes, and release/notes.sh adds the layout, sources and SHA-256:
+#   git tag -a 20261118 && git push origin 20261118
+# Running the workflow by hand builds them without publishing them.
+name: Release
+
+on:
+  push:
+    tags: ['[0-9]*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish kaiHEN.zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The devkit's packages, as the [ounce] repository serves them now. The
+      # release notes name their versions.
+      - name: Build the devkit image
+        run: |
+          docker build -t ounce-devkit https://github.com/ouncebrew/ounce-devkit.git
+          docker run --rm ounce-devkit dkp-pacman -Q libounce ouncevk libkaihen > devkit-packages.txt
+          cat devkit-packages.txt
+
+      - name: Build kaiHEN.zip
+        run: |
+          docker build --build-arg RELEASE=1 --build-arg DEVKIT_IMAGE=ounce-devkit \
+              --output type=local,dest=out .
+
+      # A test build by hand is versioned with the date.
+      - name: Build libkaihen's package
+        run: |
+          version="$GITHUB_REF_NAME"
+          if [ "$GITHUB_EVENT_NAME" != push ]; then
+              version=$(date +%Y%m%d)
+          fi
+          docker build -f packaging/Dockerfile --build-arg VERSION="$version" \
+              --build-arg SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)" \
+              --output type=local,dest=package .
+          (cd package && for package in *.pkg.tar.zst; do sha256sum "$package" > "$package.sha256"; done)
+
+      - name: Keep the test build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaiHEN
+          path: |
+            out/kaiHEN.zip
+            package/
+
+      # actions/checkout does not keep an annotated tag's message.
+      - name: Publish
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$GITHUB_REF_NAME"
+          git fetch --depth=1 --force origin "+refs/tags/$version:refs/tags/$version"
+          zip="kaiHEN-$version.zip"
+          cp out/kaiHEN.zip "$zip"
+          sh release/notes.sh "$version" "$zip" devkit-packages.txt > notes.md
+          gh release create "$version" --title "kaiHEN $version" --notes-file notes.md \
+              "$zip" package/libkaihen-*.pkg.tar.zst package/libkaihen-*.pkg.tar.zst.sha256

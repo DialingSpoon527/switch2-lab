@@ -70,3 +70,17 @@ Thumbs.db
 # Individually reviewed, maintainer-tested binaries.
 !/hen-command-bridge/hen-command-bridge.nro
 !/seedsow-fs-cleaner/seedsow-fs-cleaner.nro
+
+# Individually reviewed HEN-only updater binaries and GPL source merge baseline.
+!/hen-updater/hen-updater.nro
+!/hen-updater/tools/upstream-base.zip
+!/hen-updater/out/
+/hen-updater/out/*
+!/hen-updater/out/bootstrap.bin
+!/hen-updater/out/hotupdate-supervisor.nso
+!/hen-updater/out/ro/
+/hen-updater/out/ro/*
+!/hen-updater/out/ro/main
+!/hen-updater/out/hen/
+/hen-updater/out/hen/*
+!/hen-updater/out/hen/main
