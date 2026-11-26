@@ -1,6 +1,6 @@
 # Seedsow FS cleanup
 
-A small kaiHEN NRO for removing the recognizable scratch folders left by
+A kaiHEN cleanup tool for removing the recognizable scratch folders left by
 Seedsow FS attempts. Those folders can contain an 8 MiB scratch file and a
 chain of directories too long for backup tools to traverse. I made this after
 running into failed save backups in my own workflow.

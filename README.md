@@ -40,9 +40,9 @@ Everything is provided as-is, with no guarantee of function or support.
 
 | Project | What it does | Observed use |
 | --- | --- | --- |
-| [HEN command bridge](hen-command-bridge/) Â· [NRO](hen-command-bridge/hen-command-bridge.nro) | PC command access to a running kaiHEN homebrew session. | Version 0.3.0 used for verified bulk reads and game save backups on one console. |
-| [Seedsow FS cleanup](seedsow-fs-cleaner/) Â· [NRO](seedsow-fs-cleaner/seedsow-fs-cleaner.nro) | Removes recognized FS-attempt scratch folders from a selected Seedsow save after a verified SD copy of retained files. | Maintainer confirmed version 0.1.2 worked on their console. |
-| [HEN-only updater](hen-updater/) Â· [NRO](hen-updater/hen-updater.nro) | Replaces compatible HEN processes while retaining RO and the supervisor; includes source-build and porting helpers. | Initial startup, dry run and one same-build live handoff passed on one console. |
+| [HEN command bridge](hen-command-bridge/) | PC command access to a running kaiHEN homebrew session. | Version 0.3.0 used for verified bulk reads and save backups on one console. |
+| [Seedsow FS cleanup](seedsow-fs-cleaner/) | Removes recognized FS-attempt scratch folders from a selected Seedsow save after a verified SD copy of retained files. | Version 0.1.2 worked on my console. |
+| [HEN runtime](hen-runtime/) | One modified kaiHEN build with live HEN replacement and managed background plugins. Includes optional controller apps and a ping example. | Build 2026112505 passed a plugin restart with the host open, one same-build HEN replacement, and a fresh plugin launch afterward. |
 
 ## Licensing
 
@@ -56,4 +56,6 @@ Third-party code and dependencies retain their own licenses and any required
 notices. This dedication covers only rights I can grant; it does not claim
 ownership of anyone else's work or override their terms.
 
-The [HEN-only updater](hen-updater/) and its shared [Plugin starter runtime](plugin-starter/) are a GPL-2.0-only kaiHEN derivative with separately licensed components and examples. Their component licenses and notices apply.
+The [HEN runtime](hen-runtime/) is a GPL-2.0-only kaiHEN derivative with
+separately licensed components and examples. Its component licenses and notices
+apply.

@@ -14,4 +14,4 @@ Observed, in order:
 
 The NRO and core binaries are unchanged copies, not publication rebuilds. These observations demonstrate one successful sequence. They do not establish repeated reliability, arbitrary plugin compatibility, different-version HEN upgrades, interrupted-update recovery, gameplay stability, other firmware/launcher support or ban safety.
 
-Offline work included native builds, HEN/RO tests, 27 updater transaction/queue/package mock scenarios, paced-launch timing/deadline checks, replacement coordination, controller parsing/I/O/diagnostics, recovery helpers and SDK-encoded lifecycle/delegated-SM tests. The exported test runners target the merged source; mocks are not hardware results.
+Offline work included native builds, HEN/RO tests, 27 updater transaction/queue/package mock scenarios, paced-launch timing/deadline checks, replacement coordination, controller parsing/I/O/diagnostics, recovery helpers and SDK-encoded lifecycle/delegated-SM tests. The exported test runners in `plugin-tools/` target the merged source; mocks are not hardware results.

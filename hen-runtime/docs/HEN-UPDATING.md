@@ -1,12 +1,12 @@
-# HEN-only updater
+# HEN replacement and core build helper
 
 **For developers inspecting kaiHEN. This is largely vibecoded, AI-written work, with human direction and testing.** It is an informal working example, with no guarantee of function, compatibility, safety, packaging or support.
 
 I made this to replace the HEN process without rebooting and repeating Seedsow's 4/4 for each compatible HEN change. It keeps the existing RO and supervisor running. It does not make an arbitrary future kaiHEN release compatible with an older running environment.
 
-The current combined build **2026112505** also supports [Plugin starter](../plugin-starter/). On my console, initial startup, a plugin restart with the host open, **one same-build live HEN replacement**, and a fresh plugin launch through the replacement HEN all worked. RO and the supervisor survived the HEN replacement. [Exact observations and limits](TESTING.md).
+The current combined build **2026112505** also supports [plugin management](PLUGIN-MANAGEMENT.md). On my console, initial startup, a plugin restart with the host open, **one same-build live HEN replacement**, and a fresh plugin launch through the replacement HEN all worked. RO and the supervisor survived the HEN replacement. [Exact observations and limits](../TESTING.md).
 
-Based on official kaiHEN **20261123**, commit `3b23b5dc6e75539855eca69ffdda371ce69631bb`, with the V11-derived HEN handoff and HEN-only split. The source and original notices are retained. This project is a **GPL-2.0-only derivative**, with separately licensed components; the repository's Unlicense does not override those terms. [Origins and dependencies](DEPENDENCIES.md).
+Based on official kaiHEN **20261123**, commit `3b23b5dc6e75539855eca69ffdda371ce69631bb`, with the V11-derived HEN handoff and HEN-only split. The source and original notices are retained. This project is a **GPL-2.0-only derivative**, with separately licensed components; the repository's Unlicense does not override those terms. [Origins and dependencies](../DEPENDENCIES.md).
 
 ## What changes while running
 
@@ -24,30 +24,32 @@ This combines the plugin manager and HEN-only updater; use its matched bootstrap
 
 | File | SD destination for the tested untethered layout |
 | --- | --- |
-| [hen-updater.nro](hen-updater.nro) | `/switch/hen-updater/hen-updater.nro` |
-| [out/bootstrap.bin](out/bootstrap.bin) | `/kaihen/bin/bootstrap.bin` |
-| [out/ro/main](out/ro/main) | `/kaihen/bin/ro/main` |
-| [out/hen/main](out/hen/main) | `/kaihen/bin/hen/main` |
-| [out/hotupdate-supervisor.nso](out/hotupdate-supervisor.nso) | `/kaihen/plugins/hotupdate-supervisor.nso` |
+| `out/hen-updater.nro` | `/switch/hen-updater/hen-updater.nro` |
+| `out/bootstrap.bin` | `/kaihen/bin/bootstrap.bin` |
+| `out/ro/main` | `/kaihen/bin/ro/main` |
+| `out/hen/main` | `/kaihen/bin/hen/main` |
+| `out/hotupdate-supervisor.nso` | `/kaihen/plugins/hotupdate-supervisor.nso` |
 
-These are the exact tested binaries, not rebuilt copies. [Binary hashes and runtime notices](BINARY-NOTICES.md). The NRO alone cannot add updating to an already-running stock HEN. Matching bootstrap, RO, HEN and supervisor must start together in a fresh session. Other untethered launchers may use different paths.
+These are the exact tested binaries, not rebuilt copies. [Binary hashes and runtime notices](../BINARY-NOTICES.md). The NRO alone cannot add updating to an already-running stock HEN. Matching bootstrap, RO, HEN and supervisor must start together in a fresh session. Other untethered launchers may use different paths.
 
 The current official acquisition package instead keeps bootstrap and RO outside its `sdcard/` directory. The build helper follows that official layout. The table above is the separately checked untethered SD layout.
 
-The matching official **20261123** hbloader, hbmenu and `/kaihen/lib` files are separate dependencies. This directory does not bundle those companion apps, firmware, system policies, save data or SDKs. The build helper can use the pinned [official release ZIP](https://github.com/ouncebrew/kaihen/releases/tag/20261123) for companion files and their licenses. Dynamic homebrew support needs the updated RO/hbloader and libraries; changing only HEN cannot add it to an older environment.
+The matching official **20261123** hbloader, hbmenu and `/kaihen/lib` files are separate dependencies. This project does not bundle those companion apps, firmware, system policies, save data or SDKs. The build helper can use the pinned [official release ZIP](https://github.com/ouncebrew/kaihen/releases/tag/20261123) for companion files and their licenses. Dynamic homebrew support needs the updated RO/hbloader and libraries; changing only HEN cannot add it to an older environment.
 
 ## Build from source
 
+Run the following commands from the parent `hen-runtime/` directory, not from `docs/`.
+
 Requirements: Linux, or an installed WSL distribution on Windows; Python 3.10+; GNU Make; host G++ with ASan/UBSan; and a Linux Switch 2 SDK containing devkitA64, devkitPro tools and libounce 20261123 or newer. Git is needed for porting to another upstream revision.
 
-1. Clone or download this repository and open this directory.
+1. Clone or download this repository and open `hen-runtime/`.
 2. Windows: double-click **Build-Release.cmd**. Linux: run `sh build-release.sh`.
 3. Choose **1. Build this source**.
 4. Enter the Linux SDK folder, or press Enter to detect it. The Windows `.exe` SDK is not a Linux toolchain. The Windows helper selects an ordinary WSL distribution rather than Docker's minimal environment.
 5. Select the matching official binary-release ZIP. For this pinned version, Enter downloads the known 20261123 release and verifies its checksum.
 6. Choose a new output folder. Existing folders are not overwritten.
 
-The helper runs tests, builds the components in a fresh temporary source tree, and produces separate **first-install**, **hen-update** and **source** ZIPs, checksums and a build record. It does not contact a console or install anything to SD. Build metadata says `hardware_tested: false` because a new build has not inherited the included binaries' hardware result.
+The helper packages the core and updater, not the separate Plugin starter/ping examples. It runs tests, builds the components in a fresh temporary source tree, and produces separate **first-install**, **hen-update** and **source** ZIPs, checksums and a build record. It does not contact a console or install anything to SD. Build metadata says `hardware_tested: false` because a new build has not inherited the included binaries' hardware result.
 
 ```sh
 python3 tools/release.py build --devkitpro /opt/devkitpro --official-zip /path/kaiHEN-20261123.zip --out /path/new-output
@@ -60,7 +62,7 @@ This requires the matching supervisor already running. Preserve a working entryp
 1. Stop other managed plugins first and confirm they have exited. The supervisor is retained; generic plugin controls cannot stop it. Then extract the helper's **hen-update.zip** on the PC.
 2. Copy its `sdcard/` contents to SD. This places the candidate at `/kaihen/hotupdate/staged/hen/main` and its checksum manifest at `/kaihen/hotupdate/hen-package.txt`.
 3. Finish all transfers and leave staged files unchanged while a request is pending.
-4. For a dry run, copy `commands/DRY-RUN.txt` to SD as `/kaihen/hotupdate/hen-command.txt`. Open HEN updater. After it says **QUEUED HEN DRY RUN**, press **+**, then **HOME â†’ X â†’ Close** on the host game. Leaving the NRO alone does not close the host process.
+4. For a dry run, copy `commands/DRY-RUN.txt` to SD as `/kaihen/hotupdate/hen-command.txt`. Open HEN updater. After it says **QUEUED HEN DRY RUN**, press **+**, then **HOME → X → Close** on the host game. Leaving the NRO alone does not close the host process.
 5. For a live handoff, use `commands/APPLY.txt` at that same command path. Open the NRO and check for **QUEUED HEN-ONLY REPLACEMENT**, then leave and close the host game as above.
 6. Allow the handoff to finish before launching another game. The runtime result and `/kaihen/hotupdate/transaction-TICKET-hen.txt` distinguish a completed handoff from a queued request. A successful ticket ends with `phase=END result=00000000` and the old HEN marked stopped.
 

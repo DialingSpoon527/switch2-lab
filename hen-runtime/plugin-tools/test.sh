@@ -3,7 +3,7 @@ set -eu
 cd "$(dirname "$0")"
 export DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 export LIBOUNCE="${LIBOUNCE:-$DEVKITPRO/libounce}"
-kaihen=$(cd ../hen-updater && pwd)
+kaihen=$(cd .. && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 python3 -m unittest discover -s tests -p 'test_controller*.py' -v

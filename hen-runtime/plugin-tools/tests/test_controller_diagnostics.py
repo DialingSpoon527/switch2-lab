@@ -37,7 +37,7 @@ class ControllerDiagnosticsTests(unittest.TestCase):
             sdk = folder / 'kaihen'
             sdk.mkdir()
             shutil.copyfile(ROOT / 'tests/controller_protocol_stub.h', sdk / 'protocol.h')
-            shutil.copyfile(ROOT.parent / 'hen-updater/libkaihen/include/kaihen/diagnostics.h', sdk / 'diagnostics.h')
+            shutil.copyfile(ROOT.parent / 'libkaihen/include/kaihen/diagnostics.h', sdk / 'diagnostics.h')
             binary = folder / 'controller-diagnostics'
             subprocess.run(shlex.split(os.environ.get('CC', 'cc')) +
                            ['-std=gnu11', '-O2', '-Wall', '-Wextra', '-Werror',

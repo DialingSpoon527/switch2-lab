@@ -4,7 +4,7 @@ import tempfile
 import re
 
 root = Path(__file__).resolve().parent
-source = root.parent / 'hen-updater'
+source = root.parent
 text = (source / 'hen/source/server.cpp').read_text()
 start = text.index('bool HenServer::pluginWorkIdleForReplacement() const {')
 end = text.index('\nvoid HenServer::serveSupervisorCommand', start)

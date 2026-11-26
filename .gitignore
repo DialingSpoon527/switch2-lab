@@ -1,4 +1,4 @@
-# Defense in depth only: selected files still require human review and approval.
+# Local configuration and credentials.
 .env
 .env.*
 !.env.example
@@ -67,24 +67,22 @@ zig-out/
 Thumbs.db
 .DS_Store
 
-# Individually reviewed, maintainer-tested binaries.
+# Tested tool binaries.
 !/hen-command-bridge/hen-command-bridge.nro
 !/seedsow-fs-cleaner/seedsow-fs-cleaner.nro
 
-# Individually reviewed HEN-only updater binaries and GPL source merge baseline.
-!/hen-updater/hen-updater.nro
-!/hen-updater/tools/upstream-base.zip
-!/hen-updater/out/
-/hen-updater/out/*
-!/hen-updater/out/bootstrap.bin
-!/hen-updater/out/hotupdate-supervisor.nso
-!/hen-updater/out/ro/
-/hen-updater/out/ro/*
-!/hen-updater/out/ro/main
-!/hen-updater/out/hen/
-/hen-updater/out/hen/*
-!/hen-updater/out/hen/main
-
-# Individually reviewed, tested Plugin starter and ping example.
-!/plugin-starter/plugin-starter.nro
-!/plugin-starter/p2ping.nso
+# Matched HEN runtime binaries and pristine GPL source merge baseline.
+!/hen-runtime/tools/upstream-base.zip
+!/hen-runtime/out/
+/hen-runtime/out/*
+!/hen-runtime/out/bootstrap.bin
+!/hen-runtime/out/hotupdate-supervisor.nso
+!/hen-runtime/out/hen-updater.nro
+!/hen-runtime/out/plugin-starter.nro
+!/hen-runtime/out/p2ping.nso
+!/hen-runtime/out/ro/
+/hen-runtime/out/ro/*
+!/hen-runtime/out/ro/main
+!/hen-runtime/out/hen/
+/hen-runtime/out/hen/*
+!/hen-runtime/out/hen/main

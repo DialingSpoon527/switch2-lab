@@ -25,4 +25,10 @@ The included binaries contain linked runtime code. Notices are in [LICENSES](LIC
 
 No Nintendo firmware/game/save content, signed system policy, proprietary SDK, private key or capture is included. The running console supplies any signed policy used to construct a launch package; generated packages are not bundled here. SDK dependencies are obtained separately from their legitimate upstream projects.
 
-The current combined build also incorporates the Project 2 plugin manager/lifecycle sources and their corrections; [plugin provenance and example licenses](../plugin-starter/LICENSES.md). The supplied patch overlays and private handoff documents are not bundled; the merged source here is the build input.
+## Plugin manager and examples
+
+The plugin-manager/lifecycle changes originated in supplied Project 2 source snapshots, including correction revision 2026112502, then were integrated with the HEN-only updater and revised to combined manager build 2026112505. The corrected input archive SHA-256 is `5fd69becbd0864834473deb67e009cb6f9b8288a18a556ceea8f0d7bfb6d0167`. This records source origin; private handoff documents and conversations are not included. No upstream authorship is claimed.
+
+The example C sources and Makefiles in `plugin-tools/examples/` retain their **MIT** markers. [MIT text](LICENSES/plugin-examples-MIT.txt). No additional copyright-holder notice was supplied with those example files. The lifecycle/runtime API retains ISC markers and the existing [libkaihen notice](libkaihen/LICENSE). Test shims and fixtures retain any file-level notices. The authored SVG/JPEG icon and rendering source contain no third-party game artwork.
+
+All seven included binaries retain their applicable linked-runtime notices in [LICENSES](LICENSES/). The repository Unlicense does not waive third-party terms. The merged source is the build input; the older patch overlays are not bundled.

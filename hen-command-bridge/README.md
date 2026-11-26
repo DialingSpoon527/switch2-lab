@@ -1,6 +1,6 @@
 # HEN command bridge
 
-A native NRO and Node.js client that let a PC issue commands after a kaiHEN
+A console command bridge and Node.js client that let a PC issue commands after a kaiHEN
 session is already running. I made this so I could do more from a terminal
 without repeatedly swapping console apps. It has been useful in my own
 homebrew workflow. It is largely vibecoded and shared as developer reference,
