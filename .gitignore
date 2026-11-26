@@ -84,3 +84,7 @@ Thumbs.db
 !/hen-updater/out/hen/
 /hen-updater/out/hen/*
 !/hen-updater/out/hen/main
+
+# Individually reviewed, tested Plugin starter and ping example.
+!/plugin-starter/plugin-starter.nro
+!/plugin-starter/p2ping.nso

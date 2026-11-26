@@ -263,8 +263,19 @@ static Result _launchArmGame(LaunchState* args, Service* hen) {
         return rc;
     }
     args->mark(BootstrapOperation_GameStart);
+    rc = henStartGameArm(hen, CUR_PROCESS_HANDLE);
+    if (R_FAILED(rc)) return rc;
 
-    return henStartGameArm(hen, CUR_PROCESS_HANDLE);
+    // Optional Project 2 support must not prevent normal game arming. This
+    // command only transfers a capability; it makes no PM/Loader request.
+    // An ordinary rejection is recorded by HEN and disables manager launch.
+    const BackgroundPluginCapability background_cap = {
+        input.program_id, input.flags, input.storage_id,
+        {static_cast<u8>(args->plugins_skipped_for_restore ?
+            HenBootstrapFlag_AutoloadSkippedPendingRestore : 0), 0, 0}
+    };
+    (void)henAdoptBackgroundShell(hen, input.shell_session, &background_cap);
+    return 0;
 }
 
 static void _launchConnectRo(LaunchState* args, Handle hen_handle) {
@@ -311,6 +322,15 @@ static void _launchPublishPlugin(LaunchState* args, Handle control_session) {
 /// itself stay with HEN and the bootstrap, so that a plugin cannot close
 /// them for everyone.
 static void _launchHandOffToPlugin(LaunchState* args, Handle plugin_handle) {
+        const KaihenPluginLaunchContext startup = {
+            KAIHEN_PLUGIN_LIFECYCLE_VERSION,
+            sizeof(KaihenPluginLaunchContext),
+            KaihenPluginStart_Bootstrap,
+            KaihenPluginReason_BootPlugin,
+            KaihenPluginSession_InitialActivation,
+            KAIHEN_PLUGIN_FIRST_START_THIS_HEN_INSTANCE,
+            1, 0, 0, args->pm.pid
+        };
     args->mark(BootstrapOperation_PluginHandoff);
     Handle ready_read = INVALID_HANDLE;
     Handle release_write = INVALID_HANDLE;
@@ -339,7 +359,7 @@ static void _launchHandOffToPlugin(LaunchState* args, Handle plugin_handle) {
                 args->input.loader_root_session, args->input.fs_process,
                 args->reader_session, args->input.fs_notifier,
                 &release_write, &ready_read, &control_session)
-            : pluginAdoptHandles(&service, sm_session, fs_root,
+            : pluginAdoptHandlesWithLifecycle(&service, sm_session, fs_root, &startup,
                                           &release_write, &ready_read,
                                           &control_session);
     }
@@ -576,6 +596,11 @@ static void _launchFinishStartup(LaunchState* args) {
 
 static void _launchOne(LaunchState* args, ounce::CompilerTlsScope& tls,
                        const char* package_path, bool plugin) {
+    // Never erase a receipt still owned by the preceding transaction.
+    if (args->gate_restore_pending) {
+        args->result = MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized);
+        return;
+    }
     args->pm.result = 0;
     args->pm.pid = 0;
     if (args->report) {
@@ -714,6 +739,17 @@ static void _launchPlugin(LaunchState* args, ounce::CompilerTlsScope& tls,
 
     args->current_outcome = PluginOutcome_Running;
     _launchOne(args, tls, package_name, true);
+    // The plugin can be running without a published IPC service. Keep its
+    // exact PID so HEN can manage/stop it later, including at boot.
+    if (R_SUCCEEDED(args->result) && args->pm.pid &&
+        args->hen_session != INVALID_HANDLE) {
+        Service hen = {};
+        serviceCreate(&hen, args->hen_session); // borrowed bootstrap session
+        const HenPluginRecord plugin = {args->current_plugin, args->pm.pid};
+        // Tracking is additive: failure here does not invalidate a started
+        // plugin or silently terminate the rest of the bootstrap.
+        (void)henRegisterPluginProcess(&hen, &plugin);
+    }
     _launchRecordPlugin(args, name,
         R_FAILED(args->result) ? PluginOutcome_StartFailed : args->current_outcome);
 }

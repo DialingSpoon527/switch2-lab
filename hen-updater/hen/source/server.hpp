@@ -5,6 +5,9 @@
 #include "../../common/control.h"
 #include "game_arm.hpp"
 #include "sm_proxy.hpp"
+#include "background_plugin.hpp"
+#include "managed_registry.hpp"
+#include "graceful_shutdown.hpp"
 #include "../../libkaihen/source/cmif_server.hpp"
 
 /// HEN's IPC server. It serves the mig:usr control port, on which the
@@ -64,7 +67,7 @@ class HenServer {
     /// What a command answers.
     struct CommandReply {
         Result result = MAKERESULT(Module_Libnx, LibnxError_BadInput);
-        u8 data[sizeof(HenPluginName)] = {}; ///< The largest reply.
+        u8 data[sizeof(HenManagerDiagnosticsV1)] = {}; ///< Largest cached reply.
         size_t data_size = 0;
         /// A handle the reply copies to the client, or INVALID_HANDLE.
         Handle copy_handle = INVALID_HANDLE;
@@ -115,6 +118,7 @@ class HenServer {
     Result openPlugin(const HenPluginName& name, Handle* out_session);
     void removePlugin(u32 index);
     void removeExitedPlugins();
+    bool pluginWorkIdleForReplacement() const;
 
     bool stop_requested_ = false;
     Handle port_ = INVALID_HANDLE;
@@ -132,4 +136,34 @@ class HenServer {
     u32 plugin_count_ = 0;
     HenStatus status_ = {};
     GameArm game_ = {};
+    BackgroundPluginManager background_ = {};
+    GracefulShutdown graceful_ = {};
+    pluginmanager::Registry managed_ = {};
+    bool restart_pending_ = false;
+    HenBackgroundPluginRequest restart_request_ = {};
+    u64 request_host_pid_ = 0;
+    u64 restart_host_pid_ = 0;
+    u64 manager_loop_iterations_ = 0;
+    u64 manager_game_steps_ = 0;
+    u64 manager_game_suppressed_ = 0;
+    u64 manager_pm_started_ = 0;
+    u64 manager_pm_completed_ = 0;
+    u64 manager_tracked_serial_ = 0;
+    u64 manager_poll_tick_ = 0;
+    bool manager_poll_started_ = false;
+    Result manager_shell_result_ = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+    Result manager_game_start_result_ = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+    Result manager_last_pm_result_ = 0;
+    u32 manager_game_start_attempts_ = 0;
+    u32 manager_bootstrap_flags_ = 0;
+    HenManagerDiagnosticsV1 managerDiagnostics() const;
+    Result managerQueryProcessPresence(u64 pid, bool* exists);
+    Result managerQueryProgramId(u64* program, u64 pid);
+    void recordStartedPlugin();
+    bool managerNeedsPoll() const;
+    void expireManagedStops();
+    Result queueManagedBackground(const HenBackgroundPluginRequest& request,
+                                  u64 host_pid, bool from_restart = false);
+    void tickGracefulShutdown();
+    Result stopManaged(const HenPluginName& name, u32 reason = KaihenPluginShutdown_UserStop);
 };

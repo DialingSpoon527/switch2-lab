@@ -7,6 +7,7 @@
 #include "../../common/package.hpp"
 #include "../../common/loader_gate.hpp"
 #include "game_trace.hpp"
+#include "background_plugin.hpp"
 
 using GameMemory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
 using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
@@ -30,6 +31,8 @@ class GameArm {
     /// the system Loader's object, so a client's SetCurrentProcess on any of
     /// them would rebind it; libounce does not send it on the override.
     Handle loaderRoot() const { return loader_root_; }
+    bool backgroundContext(BackgroundPluginContext* out) const;
+    Result queryProcessPresence(u64 process_id, bool* exists);
     Result start(Handle filesystem_root, Handle bootstrap_process, bool paused = false);
     void step();
     // Single-threaded in HEN's server loop: no concurrent GameArm::step().
@@ -44,6 +47,8 @@ class GameArm {
     void resumeHold() { held_ = false; }
     HenGameStatus status() const;
     HenDebugSnapshot debugSnapshot() const { return {status_, trace_.snapshot()}; }
+    GameTraceSnapshot traceSnapshot() const { return trace_.snapshot(); }
+    bool managerHousekeepingAllowed() const;
 
   private:
     enum class InputChoice {

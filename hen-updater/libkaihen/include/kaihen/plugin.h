@@ -52,6 +52,7 @@
 #include <switch.h>
 #include "protocol.h"
 #include "supervisor_launch.h"
+#include "lifecycle.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,6 +99,20 @@ Result pluginRuntimeGetSupervisorLaunch(KaihenSupervisorLaunchGeometry* geometry
 // Borrowed initial control-client end and initialized FS root. The client
 // keeps the plugin IPC service live across HEN generations.
 Result pluginRuntimeGetSupervisorControlClient(Handle* client, Handle* fs_root);
+// Lifecycle-only plugins can opt into the same control registration
+// without implementing application RPC. Start the service with
+// pluginServiceStartLifecycleOnly() and wait on its lifecycle event.
+NX_INLINE Result pluginRuntimeInitializeWithLifecycle(Handle* ready,
+                                                       Handle* control) {
+    return pluginRuntimeInitializeWithService(ready, control);
+}
+
+/**
+ * Startup origin/phase and per-name HEN-generation launch count. Must be called
+ * AFTER pluginRuntimeInitialize[WithService]. Legacy/older bootstrap sends no
+ * context; in that case this returns NotFound and the plugin must handle it.
+ */
+Result pluginRuntimeGetLaunchContext(KaihenPluginLaunchContext* out);
 
 /// Maximum scalar request and reply size supported by PluginService.
 #define KAIHEN_PLUGIN_MESSAGE_SIZE 64
@@ -107,7 +122,8 @@ Result pluginRuntimeGetSupervisorControlClient(Handle* client, Handle* fs_root);
  *        the callback, so the callback may make other IPC calls.
  * @param command_id The plugin's own command number.
  * @param input Input bytes, or NULL when input_size is zero.
- * @param input_size Number of input bytes.
+ * @param input_size Number of input bytes, rounded to a whole 32-bit word.
+ *        Variable-length messages must carry their own explicit length.
  * @param output Buffer of KAIHEN_PLUGIN_MESSAGE_SIZE bytes.
  * @param[out] output_size Bytes written to output on success.
  * @param context Caller-owned context kept alive until pluginServiceStop.
@@ -117,6 +133,12 @@ Result pluginRuntimeGetSupervisorControlClient(Handle* client, Handle* fs_root);
 typedef Result (*PluginServiceHandler)(u32 command_id, const void* input,
                                        size_t input_size, void* output,
                                        size_t* output_size, void* context);
+
+// A shutdown handler runs on the plugin's own calling thread, never on
+// HEN's IPC thread or the plugin's PluginService control thread. It must
+// return promptly; after the grace deadline HEN may terminate the process.
+typedef void (*PluginLifecycleShutdownHandler)(
+    const KaihenPluginShutdownRequest* request, void* context);
 
 /// Maximum number of client sessions that a PluginService serves at once.
 #define KAIHEN_PLUGIN_MAX_SESSIONS 16
@@ -137,6 +159,14 @@ typedef struct {
     Thread worker_thread;
     Thread control_thread;
     Mutex sessions_lock;
+    Mutex lifecycle_lock;
+    Handle lifecycle_write;  ///< Signals a shutdown to the plugin main loop.
+    Handle lifecycle_read;   ///< Borrowed; becomes invalid on pluginServiceStop.
+    KaihenPluginShutdownRequest lifecycle_pending;
+    bool lifecycle_has_request;
+    bool lifecycle_has_pending;
+    PluginLifecycleShutdownHandler lifecycle_handler;
+    void* lifecycle_context;
     Handle sessions[KAIHEN_PLUGIN_MAX_SESSIONS]; ///< Server ends of the client sessions.
     PluginServiceHandler handler;
     void* context;
@@ -156,6 +186,24 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
  *         closing the control session is not a failure.
  */
 Result pluginServiceStop(PluginService* service);
+
+// Optional service for plugins with no application IPC commands.
+// Still publishes an HEN-controlled lifecycle endpoint for stop/restart.
+Result pluginServiceStartLifecycleOnly(PluginService* service,
+                                       Handle control_session);
+
+// Subscribe to a cooperative shutdown callback. Register after
+// pluginServiceStart; call pluginServiceDispatchLifecycle from the plugin's
+// main/event loop to execute the callback on that thread.
+void pluginServiceSetShutdownHandler(PluginService* service,
+        PluginLifecycleShutdownHandler handler, void* context);
+// The returned event is BORROWED. Wait on it, then DispatchLifecycle.
+Handle pluginServiceLifecycleEvent(const PluginService* service);
+// Returns true once per received request. Invokes handler on caller thread.
+// It is also valid to consume requests with TakeLifecycle instead.
+bool pluginServiceDispatchLifecycle(PluginService* service);
+bool pluginServiceTakeLifecycle(PluginService* service,
+                                KaihenPluginShutdownRequest* out);
 
 /// Closes the services and the handles from the bootstrap.
 void pluginRuntimeExit(void);

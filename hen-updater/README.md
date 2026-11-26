@@ -4,7 +4,7 @@
 
 I made this to replace the HEN process without rebooting and repeating Seedsow's 4/4 for each compatible HEN change. It keeps the existing RO and supervisor running. It does not make an arbitrary future kaiHEN release compatible with an older running environment.
 
-On my console, initial startup, the updater NRO's dry run and **one same-build live HEN replacement** worked. The old HEN exited, the new HEN initialized, the supervisor and RO survived, and I could return through R-held hbmenu to the command bridge. [Exact observations and limits](TESTING.md).
+The current combined build **2026112505** also supports [Plugin starter](../plugin-starter/). On my console, initial startup, a plugin restart with the host open, **one same-build live HEN replacement**, and a fresh plugin launch through the replacement HEN all worked. RO and the supervisor survived the HEN replacement. [Exact observations and limits](TESTING.md).
 
 Based on official kaiHEN **20261123**, commit `3b23b5dc6e75539855eca69ffdda371ce69631bb`, with the V11-derived HEN handoff and HEN-only split. The source and original notices are retained. This project is a **GPL-2.0-only derivative**, with separately licensed components; the repository's Unlicense does not override those terms. [Origins and dependencies](DEPENDENCIES.md).
 
@@ -18,7 +18,7 @@ Based on official kaiHEN **20261123**, commit `3b23b5dc6e75539855eca69ffdda371ce
 | Bootstrap, hbloader, hbmenu, libraries | Need their own matching files; live HEN replacement does not upgrade them |
 | Seedsow save | No save edit is part of this updater |
 
-This is separate from the experimental V24/V24.1 RO-backend updater. Their bootstrap and supervisor are not interchangeable. The privileged filename **hotupdate-supervisor.nso** is part of the bootstrap handoff and cannot simply be renamed.
+This combines the plugin manager and HEN-only updater; use its matched bootstrap, HEN and supervisor together. It supersedes the earlier updater-only binary set in this directory. This is separate from the experimental V24/V24.1 RO-backend updater. Their bootstrap and supervisor are not interchangeable. The privileged filename **hotupdate-supervisor.nso** is part of the bootstrap handoff and cannot simply be renamed.
 
 ## Included tested files
 
@@ -57,10 +57,10 @@ python3 tools/release.py build --devkitpro /opt/devkitpro --official-zip /path/k
 
 This requires the matching supervisor already running. Preserve a working entrypoint and a usable SD restoration path before experimenting. The included binary set's initial setup is not an automatic installer.
 
-1. Extract the helper's **hen-update.zip** on the PC.
+1. Stop other managed plugins first and confirm they have exited. The supervisor is retained; generic plugin controls cannot stop it. Then extract the helper's **hen-update.zip** on the PC.
 2. Copy its `sdcard/` contents to SD. This places the candidate at `/kaihen/hotupdate/staged/hen/main` and its checksum manifest at `/kaihen/hotupdate/hen-package.txt`.
 3. Finish all transfers and leave staged files unchanged while a request is pending.
-4. For a dry run, copy `commands/DRY-RUN.txt` to SD as `/kaihen/hotupdate/hen-command.txt`. Open HEN updater. After it says **QUEUED HEN DRY RUN**, press **+**, then **HOME → X → Close** on the host game. Leaving the NRO alone does not close the host process.
+4. For a dry run, copy `commands/DRY-RUN.txt` to SD as `/kaihen/hotupdate/hen-command.txt`. Open HEN updater. After it says **QUEUED HEN DRY RUN**, press **+**, then **HOME â†’ X â†’ Close** on the host game. Leaving the NRO alone does not close the host process.
 5. For a live handoff, use `commands/APPLY.txt` at that same command path. Open the NRO and check for **QUEUED HEN-ONLY REPLACEMENT**, then leave and close the host game as above.
 6. Allow the handoff to finish before launching another game. The runtime result and `/kaihen/hotupdate/transaction-TICKET-hen.txt` distinguish a completed handoff from a queued request. A successful ticket ends with `phase=END result=00000000` and the old HEN marked stopped.
 
@@ -68,7 +68,7 @@ The manifest is exactly `target=hen` and `sha256=64_HEX_DIGITS`, on separate lin
 
 `STATUS` or an absent command shows status. `CANCEL_DEFERRED_V2` cancels a pending request before execution, not an active transaction. The helper also provides `DEFER_DRYRUN_V1` and `APPLY_HEN_PACKAGE_V1` examples. Deferred protocol **5** is required; mismatched supervisors are refused.
 
-The supervisor waits up to three minutes for host exit and two idle observations. At most three live attempts are permitted per supervisor boot. Only success plus a responsive replacement clears the per-attempt latch. `Unresolved` stops further attempts; a missing END checkpoint can be evidence of a stopped transaction. Do not treat a timeout as permission to repeat it blindly.
+The supervisor waits up to three minutes for host exit and two idle observations. Active or quarantined plugin-manager work, and live non-supervisor managed plugins, block replacement. Plugin registrations are not migrated across HEN generations; launch compatible plugins again after replacement. At most three live attempts are permitted per supervisor boot. Only success plus a responsive replacement clears the per-attempt latch. `Unresolved` stops further attempts; a missing END checkpoint can be evidence of a stopped transaction. Do not treat a timeout as permission to repeat it blindly.
 
 Live replacement leaves `/kaihen/bin/hen/main` unchanged. Using a different HEN after a future reboot is a separate SD change. This handoff is not persistence across shutdowns.
 

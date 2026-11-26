@@ -14,6 +14,7 @@
 #include "../include/kaihen/plugin.h"
 #include "plugin_startup.h"
 #include "cmif_server.hpp"
+#include "inline_payload.hpp"
 
 extern "C" {
 
@@ -66,6 +67,16 @@ ReceivedHandles g_received;
 bool g_publish_service = false;
 bool g_supervisor_mode = false;
 bool g_initialized = false;
+KaihenPluginLaunchContext g_launch_context = {};
+bool g_has_launch_context = false;
+
+// Accept the complete versioned structure after removing CMIF alignment.
+// Vanilla bootstrap has a zero-length inline payload.
+bool hasLifecyclePayload(const ounce::CmifRequest& request) {
+    size_t size = 0;
+    return ounce::inlinePayloadSize(request, &size) &&
+           size == sizeof(KaihenPluginLaunchContext);
+}
 
 bool matchesWirePayloadSize(const ounce::CmifRequest& request, size_t expected) {
     if (!request.valid)
@@ -167,6 +178,27 @@ Result adoptHandles(void* message, const ounce::CmifRequest& request,
         return rc;
     }
 
+    g_has_launch_context = false;
+    g_launch_context = {};
+    if (request.command_id == PluginStartupCommand_AdoptHandles &&
+        hasLifecyclePayload(request)) {
+        KaihenPluginLaunchContext context = {};
+        __builtin_memcpy(&context, request.data, sizeof(context));
+        if (context.version == KAIHEN_PLUGIN_LIFECYCLE_VERSION &&
+            context.size == sizeof(context) &&
+            context.start_source >= KaihenPluginStart_Bootstrap &&
+            context.start_source <= KaihenPluginStart_OnDemand &&
+            context.start_reason >= KaihenPluginReason_BootPlugin &&
+            context.start_reason <= KaihenPluginReason_ManagerRestart &&
+            context.session_phase >= KaihenPluginSession_InitialActivation &&
+            context.session_phase <= KaihenPluginSession_Live &&
+            context.reserved == 0 &&
+            !(context.flags & ~KAIHEN_PLUGIN_FIRST_START_THIS_HEN_INSTANCE) &&
+            context.launch_number && context.process_id) {
+            g_launch_context = context;
+            g_has_launch_context = true;
+        }
+    }
     g_received.sm_session = request.hipc.data.copy_handles[0];
     g_received.fs_root = request.hipc.data.copy_handles[1];
     if (g_supervisor_mode) {
@@ -294,8 +326,10 @@ Result receiveBootstrapHandles(Handle port, Handle* out_session, Handle* release
         const u64 timeout = primary_received && g_supervisor_mode
             ? ReleaseTimeoutNs : UINT64_MAX;
         Result rc = svcReplyAndReceive(&index, handles, count, INVALID_HANDLE, timeout);
-        if (R_FAILED(rc))
+        if (R_FAILED(rc)) {
+            *out_session = session;
             return rc;
+        }
 
         if (index == 0) {
             rc = svcAcceptSession(&session, port);
@@ -332,8 +366,11 @@ Result receiveThroughMigrationService() {
     closeHandle(&session);
     closeHandle(&release_event);
 
-    if (R_SUCCEEDED(rc))
-        rc = smUnregisterServiceInSpace(MigrationServiceSpace, smEncodeName("mig:usr"));
+    // Release our temporary registration on failed handoffs too, so a
+    // retry or another plugin does not inherit a stale mig:usr registration.
+    const Result unregister_rc = smUnregisterServiceInSpace(
+        MigrationServiceSpace, smEncodeName("mig:usr"));
+    if (R_SUCCEEDED(rc)) rc = unregister_rc;
     svcCloseHandle(port);
     return rc;
 }
@@ -348,6 +385,11 @@ Result installReceivedServices() {
 } // namespace
 
 Result pluginRuntimeInitialize(Handle* out_ready_event) {
+    if (!out_ready_event) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    if (g_initialized) return MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized);
+    *out_ready_event = INVALID_HANDLE;
+    g_has_launch_context = false;
+    g_launch_context = {};
     Result rc = smInitialize();
     if (R_FAILED(rc))
         return rc;
@@ -371,6 +413,10 @@ Result pluginRuntimeInitialize(Handle* out_ready_event) {
 
 Result pluginRuntimeInitializeWithService(Handle* out_ready_event,
                                           Handle* out_control_session) {
+    if (!out_ready_event || !out_control_session)
+        return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    if (g_initialized) return MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized);
+    *out_control_session = INVALID_HANDLE;
     g_publish_service = true;
     Result rc = pluginRuntimeInitialize(out_ready_event);
     if (R_SUCCEEDED(rc))
@@ -414,7 +460,18 @@ Result pluginRuntimeGetSupervisorControlClient(Handle* client, Handle* fs_root) 
     return 0;
 }
 
+Result pluginRuntimeGetLaunchContext(KaihenPluginLaunchContext* out) {
+    if (!out) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    *out = {};
+    if (!g_initialized) return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+    if (!g_has_launch_context) return MAKERESULT(Module_Libnx, LibnxError_NotFound);
+    *out = g_launch_context;
+    return 0;
+}
+
 void pluginRuntimeExit(void) {
+    g_has_launch_context = false;
+    g_launch_context = {};
     if (g_initialized) {
         smExit();
         g_initialized = false;

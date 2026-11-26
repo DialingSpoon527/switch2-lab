@@ -16,6 +16,7 @@
 
 #include "../include/kaihen/plugin.h"
 #include "cmif_server.hpp"
+#include "inline_payload.hpp"
 
 namespace {
 
@@ -42,6 +43,53 @@ bool isCreateSession(const ounce::CmifRequest& request) {
     return request.valid && request.hipc.meta.type == CmifCommandType_Request &&
         request.command_id == HEN_PLUGIN_CONTROL_CREATE_SESSION &&
         ounce::hasOnlyInlineData(request);
+}
+
+bool isLifecycleShutdown(const ounce::CmifRequest& request) {
+    if (!request.valid || request.hipc.meta.type != CmifCommandType_Request ||
+        request.command_id != KAIHEN_PLUGIN_CONTROL_REQUEST_SHUTDOWN ||
+        !ounce::hasOnlyInlineData(request)) return false;
+    size_t size = 0;
+    return ounce::inlinePayloadSize(request, &size) &&
+           size == sizeof(KaihenPluginShutdownRequest);
+}
+
+// The control thread acknowledges that HEN delivered the notice, NOT that
+// the plugin exited. User cleanup runs later on the plugin's own thread.
+Result noteLifecycleShutdown(PluginService* service,
+                             const KaihenPluginShutdownRequest* message) {
+    if (message->version != KAIHEN_PLUGIN_LIFECYCLE_VERSION ||
+        message->size != sizeof(*message) ||
+        message->reason < KaihenPluginShutdown_UserStop ||
+        message->reason > KaihenPluginShutdown_Update)
+        return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    mutexLock(&service->lifecycle_lock);
+    if (service->lifecycle_has_request &&
+        service->lifecycle_pending.sequence == message->sequence) {
+        // Retransmission is harmless, including after the main loop has
+        // already consumed it. Reusing an ID with different data is invalid.
+        const bool same = std::memcmp(&service->lifecycle_pending, message,
+                                      sizeof(*message)) == 0;
+        mutexUnlock(&service->lifecycle_lock);
+        return same ? 0 : MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    }
+    if (service->lifecycle_has_pending) {
+        mutexUnlock(&service->lifecycle_lock);
+        return MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized);
+    }
+    const auto previous = service->lifecycle_pending;
+    service->lifecycle_pending = *message;
+    // Signal under the same lock as the consumer's ClearEvent. Otherwise
+    // consume-before-signal can leave a permanently signaled empty queue.
+    const Result signal_rc = svcSignalEvent(service->lifecycle_write);
+    if (R_SUCCEEDED(signal_rc)) {
+        service->lifecycle_has_request = true;
+        service->lifecycle_has_pending = true;
+    } else {
+        service->lifecycle_pending = previous;
+    }
+    mutexUnlock(&service->lifecycle_lock);
+    return signal_rc;
 }
 
 /// Creates a session pair in a free slot of the table, wakes the worker and
@@ -71,9 +119,14 @@ Result serveControlRequest(PluginService* service) {
     Result rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
     if (isCreateSession(request))
         rc = createClientSession(service, &client);
+    else if (isLifecycleShutdown(request)) {
+        KaihenPluginShutdownRequest shutdown = {};
+        std::memcpy(&shutdown, request.data, sizeof(shutdown));
+        rc = noteLifecycleShutdown(service, &shutdown);
+    }
     ounce::closeRequestHandles(request);
 
-    if (R_SUCCEEDED(rc))
+    if (R_SUCCEEDED(rc) && isCreateSession(request))
         ounce::writeReply(message, 0, nullptr, 0, &client, 1);
     else
         ounce::writeReply(message, rc, nullptr, 0);
@@ -167,23 +220,16 @@ bool isPluginCommand(const ounce::CmifRequest& request) {
 /// handler may make IPC calls of its own.
 Result callHandler(PluginService* service, const ounce::CmifRequest& request,
                    u8 output[KAIHEN_PLUGIN_MESSAGE_SIZE], size_t* output_size) {
-    // Exclude CMIF alignment padding from the input length handed to plugins.
-    const auto* words = reinterpret_cast<const u8*>(request.hipc.data.data_words);
-    const auto* aligned = static_cast<const u8*>(
-        cmifGetAlignedDataStart(request.hipc.data.data_words, armGetTls()));
-    const size_t leading = static_cast<size_t>(aligned - words);
-    if (leading > 15 || request.data_size < 16 - leading)
-        return MAKERESULT(Module_Libnx, LibnxError_BadInput);
-    const size_t payload_size = request.data_size - (16 - leading);
-    if (payload_size > KAIHEN_PLUGIN_MESSAGE_SIZE)
+    size_t input_size = 0;
+    if (!ounce::inlinePayloadSize(request, &input_size) ||
+        input_size > KAIHEN_PLUGIN_MESSAGE_SIZE)
         return MAKERESULT(Module_Libnx, LibnxError_BadInput);
 
     u8 input[KAIHEN_PLUGIN_MESSAGE_SIZE] = {};
-    if (payload_size)
-        std::memcpy(input, request.data, payload_size);
+    if (input_size) std::memcpy(input, request.data, input_size);
     const Result rc = service->handler(request.command_id,
-                                       payload_size ? input : nullptr,
-                                       payload_size, output, output_size,
+                                       input_size ? input : nullptr,
+                                       input_size, output, output_size,
                                        service->context);
     if (*output_size > KAIHEN_PLUGIN_MESSAGE_SIZE)
         return MAKERESULT(Module_Libnx, LibnxError_BadInput);
@@ -293,6 +339,8 @@ void closeEvents(PluginService* service) {
     closeHandle(&service->wake_read);
     closeHandle(&service->stop_write);
     closeHandle(&service->stop_read);
+    closeHandle(&service->lifecycle_write);
+    closeHandle(&service->lifecycle_read);
 }
 
 } // namespace
@@ -307,6 +355,7 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
     service->handler = handler;
     service->context = context;
     mutexInit(&service->sessions_lock);
+    mutexInit(&service->lifecycle_lock);
 
     Result rc = svcCreateEvent(&service->stop_write, &service->stop_read);
     if (R_FAILED(rc))
@@ -315,6 +364,10 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
     rc = svcCreateEvent(&service->wake_write, &service->wake_read);
     if (R_FAILED(rc))
         goto fail_events;
+
+    // Separate manual-clear event for plugin main-loop lifecycle hooks.
+    rc = svcCreateEvent(&service->lifecycle_write, &service->lifecycle_read);
+    if (R_FAILED(rc)) goto fail_events;
 
     rc = startThread(service, &service->worker_thread, workerThread);
     if (R_FAILED(rc))
@@ -333,6 +386,61 @@ fail_worker:
 fail_events:
     closeEvents(service);
     return rc;
+}
+
+static Result lifecycleOnlyCommand(u32, const void*, size_t, void*,
+                                   size_t*, void*) {
+    return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+}
+
+Result pluginServiceStartLifecycleOnly(PluginService* service, Handle control_session) {
+    return pluginServiceStart(service, control_session, lifecycleOnlyCommand, nullptr);
+}
+
+void pluginServiceSetShutdownHandler(PluginService* service,
+        PluginLifecycleShutdownHandler handler, void* context) {
+    if (!service || !service->started) return;
+    mutexLock(&service->lifecycle_lock);
+    service->lifecycle_handler = handler;
+    service->lifecycle_context = context;
+    mutexUnlock(&service->lifecycle_lock);
+}
+
+Handle pluginServiceLifecycleEvent(const PluginService* service) {
+    return service && service->started ? service->lifecycle_read : INVALID_HANDLE;
+}
+
+bool pluginServiceTakeLifecycle(PluginService* service,
+                                KaihenPluginShutdownRequest* out) {
+    if (!service || !out || !service->started) return false;
+    mutexLock(&service->lifecycle_lock);
+    const bool available = service->lifecycle_has_pending;
+    if (available) {
+        // Serialized under the same lock as the request writer: no lost
+        // event if a second notice arrives concurrently. Do not consume a
+        // notice if its event cannot be cleared.
+        if (R_FAILED(svcClearEvent(service->lifecycle_read))) {
+            mutexUnlock(&service->lifecycle_lock);
+            return false;
+        }
+        *out = service->lifecycle_pending;
+        service->lifecycle_has_pending = false;
+    }
+    mutexUnlock(&service->lifecycle_lock);
+    return available;
+}
+
+bool pluginServiceDispatchLifecycle(PluginService* service) {
+    KaihenPluginShutdownRequest request = {};
+    if (!pluginServiceTakeLifecycle(service, &request)) return false;
+    PluginLifecycleShutdownHandler callback = nullptr;
+    void* user = nullptr;
+    mutexLock(&service->lifecycle_lock);
+    callback = service->lifecycle_handler;
+    user = service->lifecycle_context;
+    mutexUnlock(&service->lifecycle_lock);
+    if (callback) callback(&request, user);
+    return true;
 }
 
 Result pluginServiceStop(PluginService* service) {

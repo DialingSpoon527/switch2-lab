@@ -2,6 +2,7 @@
 #pragma once
 #include <switch.h>
 #include "game_arm.h"
+#include "background_plugin.h"
 #include "../libkaihen/include/kaihen.h"
 
 // kaiHEN's CMIF interface
@@ -33,6 +34,8 @@ enum HenControlCommand {
     HenControlCommand_QuerySupervisorQuiescence = 17,
     HenControlCommand_HoldGameArm = 18,
     HenControlCommand_ResumeGameArm = 19,
+    HenControlCommand_AdoptBackgroundShell = 33,
+    HenControlCommand_RegisterPluginProcess = 34,
 };
 
 
@@ -129,6 +132,12 @@ typedef struct {
     u64 process_id;     ///< HEN stops listing the plugin once this process has exited.
 } HenPluginRecord;
 
+// Track even plugins that do not publish a control IPC service. Only the
+// privileged bootstrap control channel can submit this record.
+NX_INLINE Result henRegisterPluginProcess(Service* s, const HenPluginRecord* record) {
+    return serviceDispatchIn(s, HenControlCommand_RegisterPluginProcess, *record);
+}
+
 /// Give HEN a COPY of an opt-in plugin's control session, with its name and process.
 NX_INLINE Result henAdoptPlugin(Service* s, const HenPluginRecord* plugin, Handle control_session) {
     return serviceDispatchIn(s, HenControlCommand_AdoptPlugin, *plugin,
@@ -182,6 +191,15 @@ NX_INLINE Result henCreateRoControlSession(Service* s, Handle* out) {
     return serviceDispatch(s, HenControlCommand_CreateRoControlSession,
         .out_handle_attrs = {SfOutHandleAttr_HipcCopy},
         .out_handles = out);
+}
+
+/// Copy a privileged pm:shell handle from the initial bootstrap into
+/// HEN for future same-boot native plugin launches. No RO modification.
+NX_INLINE Result henAdoptBackgroundShell(Service* s, Handle shell,
+                                         const BackgroundPluginCapability* cap) {
+    return serviceDispatchIn(s, HenControlCommand_AdoptBackgroundShell, *cap,
+        .in_num_handles = 1,
+        .in_handles = {shell});
 }
 
 /// Start game arming. HEN closes its COPY of the bootstrap process handle.

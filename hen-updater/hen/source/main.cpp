@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <switch.h>
+#include <new>
 #include "server.hpp"
 
 extern "C" {
@@ -21,10 +22,15 @@ int main(int argc, char** argv) {
         return static_cast<int>(rc);
     }
     {
-        HenServer server;
-        rc = server.initialize();
-        if (R_SUCCEEDED(rc)) {
-            rc = server.run();
+        // Keep the enlarged manager off the signed title's main stack.
+        // Destroy it before smExit so its IPC dependencies remain available.
+        HenServer* server = new (std::nothrow) HenServer;
+        if (!server) {
+            rc = MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
+        } else {
+            rc = server->initialize();
+            if (R_SUCCEEDED(rc)) rc = server->run();
+            delete server;
         }
     }
     smExit();

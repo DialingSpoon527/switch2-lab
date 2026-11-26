@@ -2,6 +2,7 @@
 #include <cstring>
 #include <switch.h>
 #include "game_arm.hpp"
+#include "../../common/paced_loader_step.hpp"
 #include "../../common/hold_eligibility.hpp"
 #include "../../common/package.hpp"
 #include "../../common/result.hpp"
@@ -151,6 +152,46 @@ Result GameArm::adoptLoaderRoot(Handle root) {
     R_SUCCEED();
 }
 
+// Report PM errors separately from an observed missing process. The
+// existing processExists() is deliberately conservative too; this additional
+// API lets the manager retain a useful diagnostic when PM cannot answer.
+Result GameArm::queryProcessPresence(u64 process_id, bool* exists) {
+    if (!exists || !process_id)
+        return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    *exists = true;
+    if (monitor_ == INVALID_HANDLE)
+        return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+    serviceCreate(pmdmntGetServiceSession(), monitor_);
+    u64 program_id = 0;
+    const Result rc = pmdmntGetProgramId(&program_id, process_id);
+    if (rc == ProcessNotFound) { *exists = false; return 0; }
+    return rc;
+}
+
+// The only launch lease HEN can issue while normal game startup is idle.
+// Never share the Loader gate while a pending game mount is being handled.
+bool GameArm::backgroundContext(BackgroundPluginContext* out) const {
+    if (!out || !ounce::canBorrowPluginLoader(
+            started_ && configured_ && handles0_ && handles1_, held_,
+            bootstrap_restore_pending_, step_started_, capture_pending_,
+            state_ == State::WaitForInput && status_.phase == HenGamePhase_WaitingForGame,
+            state_ == State::WaitExit && status_.phase == HenGamePhase_WaitingForExit,
+            status_.result == 0) ||
+        reader_session_ == INVALID_HANDLE || filesystem_process_ == INVALID_HANDLE ||
+        loader_root_ == INVALID_HANDLE || filesystem_root_ == INVALID_HANDLE ||
+        monitor_ == INVALID_HANDLE) return false;
+    *out = {};
+    out->memory = memory_config_;
+    out->gate = gate_config_;
+    out->mount = mount_config_;
+    out->reader = reader_session_;
+    out->fs_process = filesystem_process_;
+    out->loader_root = loader_root_;
+    out->fs_root = filesystem_root_;
+    out->monitor = monitor_;
+    return true;
+}
+
 Result GameArm::start(Handle filesystem_root, Handle bootstrap_process, bool paused) {
     R_UNLESS(configured_, UnexpectedState);
     R_UNLESS(handles0_, UnexpectedState);
@@ -182,6 +223,16 @@ Result GameArm::start(Handle filesystem_root, Handle bootstrap_process, bool pau
     // A replacement must NOT begin work on Loader before old HEN exits.
     held_ = paused;
     return 0;
+}
+
+// Optional manager IPC is forbidden during startup, gate recovery,
+// parking, request exchange, and initial policy capture. The ordinary game
+// loop retains its own existing behavior.
+bool GameArm::managerHousekeepingAllowed() const {
+    return !held_ && started_ && configured_ && handles0_ && handles1_ &&
+        monitor_ != INVALID_HANDLE && !bootstrap_restore_pending_ &&
+        !step_started_ && !capture_pending_ &&
+        (state_ == State::WaitForInput || state_ == State::WaitExit);
 }
 
 HenGameStatus GameArm::status() const {

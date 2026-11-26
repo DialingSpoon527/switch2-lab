@@ -94,7 +94,82 @@ typedef enum {
     /// it to Switch 2 programs as their fsp-ldr override. Every clone shares
     /// the root's object: a client must not send SetCurrentProcess on it.
     HenHomebrewCommand_GetLoaderRoot = 23,
+    HenHomebrewCommand_LaunchBackgroundPlugin = 24,
+    HenHomebrewCommand_GetBackgroundPluginStatus = 25,
+    HenHomebrewCommand_CancelBackgroundPlugin = 26,
+    HenHomebrewCommand_GetManagedPluginCount = 27,
+    HenHomebrewCommand_GetManagedPluginInfo = 28,
+    HenHomebrewCommand_StopManagedPlugin = 29,
+    HenHomebrewCommand_RestartManagedPlugin = 30,
+    HenHomebrewCommand_GetManagerDiagnostics = 31,
 } HenHomebrewCommand;
+
+// On-demand native plugin at /kaihen/plugins/<name>.nso.
+// The plugin must use the ordinary libkaihen plugin runtime's mig:usr handshake.
+typedef struct {
+    char name[HEN_PLUGIN_NAME_SIZE];
+    u8 sha256[32];
+} HenBackgroundPluginRequest;
+
+typedef enum {
+    HenBackgroundPluginPhase_Idle = 0,
+    HenBackgroundPluginPhase_Queued = 1,
+    HenBackgroundPluginPhase_Verifying = 2,
+    HenBackgroundPluginPhase_Packaging = 3,
+    HenBackgroundPluginPhase_Parking = 4,
+    HenBackgroundPluginPhase_Launching = 5,
+    HenBackgroundPluginPhase_Exchanging = 6,
+    HenBackgroundPluginPhase_Restoring = 7,
+    HenBackgroundPluginPhase_Started = 8,
+    HenBackgroundPluginPhase_WaitingMigration = 9,
+    HenBackgroundPluginPhase_Provisioning = 10,
+    HenBackgroundPluginPhase_WaitingReady = 11,
+    HenBackgroundPluginPhase_RunningUnpublished = 12,
+    HenBackgroundPluginPhase_Ready = 13,
+    HenBackgroundPluginPhase_Published = 14,
+    HenBackgroundPluginPhase_PublishFailed = 15,
+    HenBackgroundPluginPhase_Failed = 16,
+    HenBackgroundPluginPhase_Quarantined = 17,
+    HenBackgroundPluginPhase_Cancelled = 18,
+    HenBackgroundPluginPhase_Exited = 19,
+} HenBackgroundPluginPhase;
+
+typedef struct {
+    u64 serial;
+    u64 pid;
+    HenBackgroundPluginPhase phase;
+    Result result;
+    u32 gate_step;
+    u32 mounts;
+} HenBackgroundPluginStatus;
+
+// Entries track only plugins HEN launched or received through the bootstrap
+// (not arbitrary OS processes). Stop is a PM termination, not a cooperative
+// plugin-protocol command. Restart accepts a new digest for file replacement.
+typedef enum {
+    HenManagedState_Running = 1,
+    HenManagedState_Stopping = 2,
+    HenManagedState_Stopped = 3,
+    HenManagedState_StopFailed = 4,
+    HenManagedState_RestartQueued = 5,
+} HenManagedState;
+// Observation flags. GraceRequested means IPC was queued; it does not prove
+// the plugin ran its cleanup callback. ExitConfirmed comes only from PM.
+enum {
+    HenManagedShutdown_GraceRequested = 1u,
+    HenManagedShutdown_ForceRequested = 2u,
+    HenManagedShutdown_ExitConfirmed = 4u,
+    HenManagedShutdown_ExitDeadlineExpired = 8u,
+};
+typedef struct {
+    HenPluginName name;
+    u64 process_id;
+    u64 serial;
+    HenManagedState state;
+    u32 origin; // 1 = boot-time, 2 = on-demand
+    Result last_result;
+    u32 shutdown_flags; // Previously reserved; unchanged structure size.
+} HenManagedPluginInfo;
 
 /// The reply of HenHomebrewCommand_GetStatus.
 typedef struct {
@@ -108,3 +183,5 @@ static_assert(sizeof(HenStatus) == 16, "HenStatus layout");
 #else
 _Static_assert(sizeof(HenStatus) == 16, "HenStatus layout");
 #endif
+
+#include "diagnostics.h"

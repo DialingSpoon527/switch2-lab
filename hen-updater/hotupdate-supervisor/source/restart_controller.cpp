@@ -145,6 +145,15 @@ Result Controller::configureNewHen(Handle new_control, Handle* supervisor) {
         escrow_.fs_process, escrow_.fs_notifier};
     if (R_SUCCEEDED(rc)) rc = henAdoptGameHandles1(&hen, game_handles);
     if (R_SUCCEEDED(rc)) rc = henAdoptLoaderRoot(&hen, escrow_.loader_root);
+    // Retain the plugin starter after a HEN replacement, using the same
+    // bootstrap-provided shell session and launch policy as initial startup.
+    if (geometry_.storage_id > 0xff)
+        return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    const BackgroundPluginCapability background_cap = {
+        geometry_.program_id, geometry_.flags, static_cast<u8>(geometry_.storage_id), {0, 0, 0}
+    };
+    if (R_SUCCEEDED(rc))
+        rc = henAdoptBackgroundShell(&hen, escrow_.shell_session, &background_cap);
     if (R_SUCCEEDED(rc)) rc = henStartGameArmPaused(&hen, CUR_PROCESS_HANDLE);
     if (R_FAILED(rc)) return rc;
 

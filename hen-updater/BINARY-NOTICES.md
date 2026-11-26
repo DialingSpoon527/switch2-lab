@@ -1,17 +1,15 @@
-# Exact tested binaries
+# Exact tested combined-build binaries
 
-These files are unchanged copies from the package used on the maintainer's console on 25 November 2026. They have not been stripped, patched or rebuilt for publication. Source is in this directory; [TESTING.md](TESTING.md) describes the one same-build handoff and its limits.
+These are unchanged copies used on the maintainer's console on 25 November 2026, manager build **2026112505**. No publication rebuild or binary patch was made. [Hardware results](TESTING.md).
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
 | [hen-updater.nro](hen-updater.nro) | 249,912 | `7306bf430548eda53682356c845165726f205caffa9b864e566683cef77a6ae3` |
-| [out/bootstrap.bin](out/bootstrap.bin) | 33,600 | `b8cef8818145d333b2ac8d3a31bc97b773a6791b96ef9ba536d91df868820199` |
+| [out/bootstrap.bin](out/bootstrap.bin) | 33,984 | `c88fa8212082045ca4b1a2dc74dd049b288b9371d40697b8b2a3f31a412679e3` |
 | [out/ro/main](out/ro/main) | 76,434 | `62a008c3a1cee7c856ed866b74d56e3939cf7cbba00f65ddcb963efced800cd4` |
-| [out/hen/main](out/hen/main) | 83,408 | `fe34f0493ee38c3fc13f3837e43711ee64cd3c3a278942094f335d167ee2ff0e` |
-| [out/hotupdate-supervisor.nso](out/hotupdate-supervisor.nso) | 91,085 | `dc94b9be620f207a8fd68f89a4b81bafad20ad2632cc5de95ba51b66e15bfd43` |
+| [out/hen/main](out/hen/main) | 142,629 | `04a96021ca063811d0c5010fb1dd3ffd1bd9f9371d0b40501d91ec6f4a277cd0` |
+| [out/hotupdate-supervisor.nso](out/hotupdate-supervisor.nso) | 93,111 | `a2a1c62561b7cc7542cd9aa2d761e7f81e5c852b1b90a90766555a429d85ca2d` |
 
-The bootstrap/RO/HEN/supervisor are a matched set. The ordinary updater is an NRO; these NSO/flat-binary components are separate startup inputs. No generated ExeFS package or system policy accompanies them.
+Bootstrap, RO, HEN and supervisor are a matched startup set. The companion [Plugin starter NRO and ping example](../plugin-starter/BINARY-NOTICES.md) use this set. No generated ExeFS package or signed policy is bundled.
 
-The binaries retain diagnostic paths from public upstream compiler/runtime builds. Those are toolchain strings, not the maintainer's workspace, account or console identifiers. Keeping the exact tested bytes preserves their original checksums.
-
-The project is GPL-2.0-only with separately licensed API/runtime components. See [DEPENDENCIES.md](DEPENDENCIES.md), [LICENSE](LICENSE) and [LICENSES](LICENSES/). The repository Unlicense does not relicense these components.
+Public upstream compiler/runtime diagnostic paths are retained in exact tested bytes. [Origins and runtime notices](DEPENDENCIES.md), [GPL license](LICENSE), [license collection](LICENSES/). The repository Unlicense does not override component terms.

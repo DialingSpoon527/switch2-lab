@@ -108,6 +108,46 @@ NX_INLINE Result kaihenOpenHomebrewSession(Service* ro, Service* out) {
     return rc;
 }
 
+/// Read cached observations. No PM, FS, or SM refresh is performed.
+/// A blocked HEN IPC server still cannot answer this synchronous request.
+NX_INLINE Result henGetManagerDiagnostics(Service* s, HenManagerDiagnosticsV1* out) {
+    return serviceDispatchOut(s, HenHomebrewCommand_GetManagerDiagnostics, *out);
+}
+
+/// Queue a verified native plugin launch. The requesting host may remain open. This request returns before the
+/// plugin starts; inspect cached status for completion.
+NX_INLINE Result henLaunchBackgroundPlugin(Service* s,
+                                            const HenBackgroundPluginRequest* request) {
+    return serviceDispatchIn(s, HenHomebrewCommand_LaunchBackgroundPlugin, *request);
+}
+
+NX_INLINE Result henGetBackgroundPluginStatus(Service* s, HenBackgroundPluginStatus* out) {
+    return serviceDispatchOut(s, HenHomebrewCommand_GetBackgroundPluginStatus, *out);
+}
+
+/// Cancels only a QUEUED launch; cannot abort PM/Loader or kill a process.
+NX_INLINE Result henCancelBackgroundPlugin(Service* s) {
+    return serviceDispatch(s, HenHomebrewCommand_CancelBackgroundPlugin);
+}
+
+/// Returns the total managed plugin entries, including stopped entries.
+NX_INLINE Result henGetManagedPluginCount(Service* s, u32* count) {
+    return serviceDispatchOut(s, HenHomebrewCommand_GetManagedPluginCount, *count);
+}
+NX_INLINE Result henGetManagedPluginInfo(Service* s, u32 index, HenManagedPluginInfo* info) {
+    return serviceDispatchInOut(s, HenHomebrewCommand_GetManagedPluginInfo, index, *info);
+}
+/// Requests forceful termination of an HEN-tracked plugin by name. Does not
+/// terminate arbitrary PIDs. Poll managed info until the process exits.
+NX_INLINE Result henStopManagedPlugin(Service* s, const HenPluginName* name) {
+    return serviceDispatchIn(s, HenHomebrewCommand_StopManagedPlugin, *name);
+}
+/// Queues a stop followed by reload of the current NSO in /kaihen/plugins.
+/// Caller supplies SHA-256 of the new file. Close foreground game afterwards.
+NX_INLINE Result henRestartManagedPlugin(Service* s, const HenBackgroundPluginRequest* request) {
+    return serviceDispatchIn(s, HenHomebrewCommand_RestartManagedPlugin, *request);
+}
+
 /// Gets HEN's status. The caller keeps ownership of the session.
 NX_INLINE Result henGetStatus(Service* s, HenStatus* out) {
     return serviceDispatchOut(s, HenHomebrewCommand_GetStatus, *out);

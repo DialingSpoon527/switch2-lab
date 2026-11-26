@@ -5,6 +5,7 @@
 #include <switch/services/pm.h>
 #include "../../common/domain_mount.hpp"
 #include "../../common/loader_gate.hpp"
+#include "../../common/paced_loader_step.hpp"
 #include "../../common/package.hpp"
 #include "../../common/policy_package.hpp"
 
@@ -151,7 +152,9 @@ Result Launcher::launch(const char* candidate_main, const char* package_file,
                         rc = mount.snapshot(before, before_count);
                         if (R_FAILED(rc)) break;
                         alignas(16) u8 request[ounce::LoaderRequestSize] = {};
-                        rc = gate.step(request);
+                        rc = ounce::pacedLoaderStep(gate, request,
+                            [] { return armTicksToNs(armGetSystemTick()); },
+                            [](u64 ns) { svcSleepThread(ns); }, KERNELRESULT(TimedOut));
                         if (R_FAILED(rc)) break;
                         rc = mount.snapshot(after, after_count);
                         if (R_FAILED(rc)) break;

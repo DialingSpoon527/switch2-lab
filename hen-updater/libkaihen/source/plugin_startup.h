@@ -5,6 +5,7 @@
 
 #include <switch.h>
 #include "../include/kaihen/supervisor_launch.h"
+#include "../include/kaihen/lifecycle.h"
 
 enum PluginStartupCommand : u32 {
     PluginStartupCommand_AdoptHandles = 1,
@@ -104,4 +105,27 @@ NX_INLINE Result pluginAdoptSupervisorGateHandles1(Service* plugin,
         .in_handles = {handles->server_copy, handles->event_read,
                        handles->event_write, handles->sm_master,
                        handles->ro_session, hen_control});
+}
+// Extended input only: the original runtime version and three output handles
+// are unchanged. Old plugin runtimes that ignore inline input still work.
+NX_INLINE Result pluginAdoptHandlesWithLifecycle(Service* plugin, Handle sm, Handle fs_root,
+        const KaihenPluginLaunchContext* startup, Handle* release_event,
+        Handle* ready_event, Handle* control_session) {
+    if (!startup) return pluginAdoptHandles(plugin, sm, fs_root,
+                                           release_event, ready_event, control_session);
+    Handle handles[3] = {INVALID_HANDLE, INVALID_HANDLE, INVALID_HANDLE};
+    u32 runtime_version = 0;
+    Result rc = serviceDispatchInOut(plugin, PluginStartupCommand_AdoptHandles,
+        *startup, runtime_version,
+        .in_num_handles = 2,
+        .in_handles = {sm, fs_root},
+        .out_handle_attrs = {SfOutHandleAttr_HipcCopy, SfOutHandleAttr_HipcCopy,
+                             SfOutHandleAttr_HipcCopy},
+        .out_handles = handles);
+    if (R_FAILED(rc)) return rc;
+    if (runtime_version == 0) handles[2] = INVALID_HANDLE;
+    *release_event = handles[0];
+    *ready_event = handles[1];
+    *control_session = handles[2];
+    return 0;
 }
