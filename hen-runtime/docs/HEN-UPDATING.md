@@ -30,9 +30,9 @@ This combines the plugin manager and HEN-only updater; use its matched bootstrap
 | `out/hen/main` | `/kaihen/bin/hen/main` |
 | `out/hotupdate-supervisor.nso` | `/kaihen/plugins/hotupdate-supervisor.nso` |
 
-These are the exact tested binaries, not rebuilt copies. [Binary hashes and runtime notices](../BINARY-NOTICES.md). The NRO alone cannot add updating to an already-running stock HEN. Matching bootstrap, RO, HEN and supervisor must start together in a fresh session. Other untethered launchers may use different paths.
+The HEN, RO, supervisor and controller binaries retain their November 25 tested bytes. The bootstrap now adds [auto-start opt-outs](PLUGIN-AUTOSTART.md); one fresh startup and a marked-plugin launch/stop passed on November 27. [Binary hashes and runtime notices](../BINARY-NOTICES.md). The NRO alone cannot add updating to an already-running stock HEN. Matching bootstrap, RO, HEN and supervisor must start together in a fresh session. Other untethered launchers may use different paths.
 
-The current official acquisition package instead keeps bootstrap and RO outside its `sdcard/` directory. The build helper follows that official layout. The table above is the separately checked untethered SD layout.
+The pinned official **20261123** acquisition package instead keeps bootstrap and RO outside its `sdcard/` directory. The build helper follows that official layout. The table above is the separately checked untethered SD layout.
 
 The matching official **20261123** hbloader, hbmenu and `/kaihen/lib` files are separate dependencies. This project does not bundle those companion apps, firmware, system policies, save data or SDKs. The build helper can use the pinned [official release ZIP](https://github.com/ouncebrew/kaihen/releases/tag/20261123) for companion files and their licenses. Dynamic homebrew support needs the updated RO/hbloader and libraries; changing only HEN cannot add it to an older environment.
 

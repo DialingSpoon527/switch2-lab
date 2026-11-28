@@ -1,6 +1,8 @@
 # Native plugins
 
-Each `.nso` in `/kaihen/plugins` starts as a separate process, after HEN.
+Each enabled `.nso` in `/kaihen/plugins` starts as a separate process, after HEN.
+The bootstrap defaults to auto-start but supports a blacklist and per-plugin
+opt-out markers; see [auto-start controls](../docs/PLUGIN-AUTOSTART.md).
 Bootstrap temporarily reaches the plugin through `mig:usr` and gives it an
 initialized SM session and FS root of its own: a session on HEN's SM proxy
 and a clone of HEN's FS root, so that a plugin cannot close FS's SM session

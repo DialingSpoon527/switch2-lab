@@ -11,6 +11,7 @@
 #include "../../ro/source/wire.h"
 #include "../../common/policy_package.hpp"
 #include "../../common/sd_writer.hpp"
+#include "autostart.hpp"
 
 using BootstrapMemory = ounce::RetainedMemory<ounce::MemoryWriter::RetainedStorage>;
 using BootstrapGate = ounce::LoaderGate<ounce::MemoryWriter::RetainedStorage>;
@@ -28,6 +29,7 @@ enum PluginOutcome : u32 {
     PluginOutcome_NameTooLong,     ///< Not started: the file name is too long.
     PluginOutcome_PackageFailed,   ///< Not started: its package could not be written.
     PluginOutcome_StartFailed,     ///< Starting it failed, and startup stopped.
+    PluginOutcome_AutostartDisabled, ///< Installed for on-demand use only.
 };
 
 struct LaunchState {
@@ -702,8 +704,8 @@ static void _launchRecordPlugin(LaunchState* args, const char* name, PluginOutco
         record.name.name[index] = name[index];
     record.outcome = outcome;
     record.stage = args->stage;
-    record.result = args->result;
-    record.pid = args->pm.pid;
+    record.result = outcome == PluginOutcome_AutostartDisabled ? 0 : args->result;
+    record.pid = outcome == PluginOutcome_AutostartDisabled ? 0 : args->pm.pid;
 }
 
 /// Starts the plugin /kaihen/plugins/<name>.nso. A plugin whose name is
@@ -798,6 +800,7 @@ static const char* _launchPluginOutcomeText(PluginOutcome outcome) {
     case PluginOutcome_NameTooLong:     return "not started: the file name is too long";
     case PluginOutcome_PackageFailed:   return "not started: its package could not be written";
     case PluginOutcome_StartFailed:     return "failed to start; the plugins after it were not started";
+    case PluginOutcome_AutostartDisabled: return "auto-start disabled; available on demand";
     }
     return "unknown";
 }
@@ -834,6 +837,51 @@ static void _launchWritePluginStatus(LaunchState* args) {
         writer.finish();
 }
 
+static Result _launchReadAutostart(FsFileSystem* sd, autostart::Plan* plan) {
+    static_assert(autostart::NameSize == HEN_PLUGIN_NAME_SIZE);
+    *plan = {};
+    FsFile file = {};
+    Result rc = fsFsOpenFile(sd, "/kaihen/plugins/no-autostart.txt", FsOpenMode_Read, &file);
+    // No blacklist preserves the original third-party plugin behavior.
+    if (R_VALUE(rc) == MAKERESULT(2, 1)) return 0; // FS PathNotFound
+    if (R_FAILED(rc)) return rc;
+    s64 size = 0;
+    rc = fsFileGetSize(&file, &size);
+    if (R_SUCCEEDED(rc) && (size < 0 || size > static_cast<s64>(autostart::MaxBytes)))
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    char text[autostart::MaxBytes];
+    u64 read = 0;
+    if (R_SUCCEEDED(rc) && size)
+        rc = fsFileRead(&file, 0, text, static_cast<u64>(size), FsReadOption_None, &read);
+    fsFileClose(&file);
+    if (R_SUCCEEDED(rc) && (read != static_cast<u64>(size) ||
+        autostart::parse(text, static_cast<size_t>(size), *plan) != autostart::Error::None))
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    return rc;
+}
+
+static void _launchWriteAutostartStatus(LaunchState* args, const char* text, size_t size) {
+    SdWriter writer;
+    if (R_SUCCEEDED(writer.begin(args->input.fs_root_session, "/kaihen/plugin-status.txt", size)) &&
+        R_SUCCEEDED(writer.write(text, size)))
+        writer.finish();
+}
+
+// A plugin installer can opt out without editing another installer's list.
+static Result _launchAutostartDisabled(FsFileSystem* sd, const autostart::Plan& blocked,
+                                       const char* name, bool* disabled) {
+    *disabled = autostart::contains(blocked, name);
+    if (*disabled) return 0;
+    char marker[FS_MAX_PATH];
+    if (!_launchPluginPath(marker, sizeof(marker), "/kaihen/plugins/", name, ".no-autostart"))
+        return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    FsDirEntryType type;
+    const Result rc = fsFsGetEntryType(sd, marker, &type);
+    if (R_VALUE(rc) == MAKERESULT(2, 1)) return 0; // FS PathNotFound
+    if (R_SUCCEEDED(rc)) *disabled = true; // Presence is enough; contents are ignored.
+    return rc;
+}
+
 static void _launchPlugins(LaunchState* args, ounce::CompilerTlsScope& tls,
                            const SignedPolicy& policy) {
     Service root = {};
@@ -841,6 +889,7 @@ static void _launchPlugins(LaunchState* args, ounce::CompilerTlsScope& tls,
     root.own_handle = false;
     FsFileSystem sd = {};
     FsDir directory = {};
+    autostart::Plan blocked;
     bool found = false;
 
     args->mark(BootstrapOperation_PluginScan);
@@ -851,10 +900,16 @@ static void _launchPlugins(LaunchState* args, ounce::CompilerTlsScope& tls,
     if (R_FAILED(args->result))
         return;
 
+    args->result = _launchReadAutostart(&sd, &blocked);
+    if (R_FAILED(args->result)) {
+        static constexpr char unavailable[] =
+            "auto-start blacklist unreadable or invalid; no plugins started\n";
+        _launchWriteAutostartStatus(args, unavailable, sizeof(unavailable) - 1);
+        goto close_sd;
+    }
     args->result = _launchPreparePluginDirectories(&sd, &found);
     if (R_FAILED(args->result) || !found)
         goto close_sd;
-
     args->result = fsFsOpenDirectory(&sd, "/kaihen/plugins", FsDirOpenMode_ReadFiles, &directory);
     if (R_FAILED(args->result))
         goto close_sd;
@@ -865,13 +920,23 @@ static void _launchPlugins(LaunchState* args, ounce::CompilerTlsScope& tls,
         args->result = fsDirRead(&directory, &count, 1, &entry);
         if (R_FAILED(args->result) || !count)
             break;
-
         const size_t length = __builtin_strlen(entry.name);
         if (entry.type != FsDirEntryType_File || length < 5 ||
             __builtin_strcmp(entry.name + length - 4, ".nso"))
             continue;
         entry.name[length - 4] = '\0';
-
+        bool disabled = false;
+        args->result = _launchAutostartDisabled(&sd, blocked, entry.name, &disabled);
+        if (R_FAILED(args->result)) {
+            // Do not accidentally start a plugin after an uncertain marker read.
+            _launchRecordPlugin(args, entry.name, PluginOutcome_StartFailed);
+            break;
+        }
+        if (disabled) {
+            args->mark(BootstrapOperation_PluginScan);
+            _launchRecordPlugin(args, entry.name, PluginOutcome_AutostartDisabled);
+            continue;
+        }
         _launchPlugin(args, tls, policy, entry.name);
         if (R_FAILED(args->result))
             break;

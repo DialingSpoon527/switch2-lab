@@ -120,6 +120,7 @@ def sdk_path(value):
 
 def host_tests(tree, sdk):
     env = dict(os.environ, LIBOUNCE=str(sdk / 'libounce'))
+    run(['sh', 'bootstrap/test.sh'], cwd=tree, env=env)
     run(['sh', 'hen/test.sh'], cwd=tree, env=env)
     run(['sh', 'ro/test.sh'], cwd=tree, env=env)
     run([sys.executable, 'hotupdate-controller/tests/check_hen_only.py'], cwd=tree)

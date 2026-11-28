@@ -1,0 +1,7 @@
+# Optional blacklist: one plugin name per line, without .nso.
+# Copy this to /kaihen/plugins/no-autostart.txt only if you want these exclusions.
+# An absent or empty blacklist leaves ordinary plugins enabled by default.
+# Alternatively ship /kaihen/plugins/NAME.no-autostart beside NAME.nso.
+# That marker also disables automatic startup without changing on-demand launch.
+# p2ping
+# my-on-demand-plugin

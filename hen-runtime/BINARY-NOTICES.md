@@ -1,12 +1,13 @@
-# Exact tested runtime binaries
+# Runtime binary identities
 
-These are unchanged copies used on the maintainer's console on 25 November 2026,
-combined manager build **2026112505**. No binary was rebuilt, patched or stripped
-for this layout cleanup. [Hardware observations](TESTING.md).
+HEN, RO, supervisor, controller and ping retain the exact bytes used on the
+maintainer's console on 25 November 2026, combined manager build **2026112505**.
+The bootstrap was rebuilt on November 27 to add optional auto-start exclusions;
+a fresh startup and marked-plugin on-demand launch/stop passed on that date. [Hardware observations and offline checks](TESTING.md).
 
-| File in out/ | Role | Tested SD destination | Bytes | SHA-256 |
+| File in out/ | Role | SD destination | Bytes | SHA-256 |
 | --- | --- | --- | ---: | --- |
-| `bootstrap.bin` | Native bootstrap | `/kaihen/bin/bootstrap.bin` | 33,984 | `c88fa8212082045ca4b1a2dc74dd049b288b9371d40697b8b2a3f31a412679e3` |
+| `bootstrap.bin` | Native bootstrap | `/kaihen/bin/bootstrap.bin` | 35,264 | `363e99c1c5fb8960e04231f5c672644221c93abb71e77605aa3c20be72bcc313` |
 | `ro/main` | Retained RO | `/kaihen/bin/ro/main` | 76,434 | `62a008c3a1cee7c856ed866b74d56e3939cf7cbba00f65ddcb963efced800cd4` |
 | `hen/main` | HEN and plugin manager | `/kaihen/bin/hen/main` | 142,629 | `04a96021ca063811d0c5010fb1dd3ffd1bd9f9371d0b40501d91ec6f4a277cd0` |
 | `hotupdate-supervisor.nso` | Resident updater supervisor | `/kaihen/plugins/hotupdate-supervisor.nso` | 93,111 | `a2a1c62561b7cc7542cd9aa2d761e7f81e5c852b1b90a90766555a429d85ca2d` |
@@ -17,8 +18,8 @@ for this layout cleanup. [Hardware observations](TESTING.md).
 Bootstrap, RO, HEN and supervisor are a matched startup set. The two NROs are
 optional controller apps; they are not substitutes for that runtime. Plugin
 starter retains its distinct authored green plug icon and version 0.1.3.
-Keeping p2ping.nso in /kaihen/plugins also makes it a startup plugin on the tested
-configuration. No generated ExeFS package or signed system policy is included.
+Plugins auto-start unless excluded by the new bootstrap
+[controls](docs/PLUGIN-AUTOSTART.md). Ping can be kept for on-demand tests. No generated ExeFS package or signed system policy is included.
 
 The binaries retain public upstream compiler/runtime diagnostic paths. These
 are not maintainer workspace or console identifiers. [Origins and runtime

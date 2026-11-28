@@ -15,7 +15,7 @@ Use the combined manager build **2026112505**, HEN API protocol 7 and updater de
 | `out/plugin-starter.nro` | `/switch/p2-plugin-control/p2-plugin-control.nro` |
 | `out/p2ping.nso` | `/kaihen/plugins/p2ping.nso` |
 
-The NRO retains the tested name **Plugin starter**, version **0.1.3**, and its distinct authored green plug icon. The ping NSO is a test service, not a useful background app by itself. Keeping it in `/kaihen/plugins/` also makes it a startup plugin on the tested configuration. Do not copy arbitrary plugins there expecting them to remain inactive.
+The NRO retains the tested name **Plugin starter**, version **0.1.3**, and its distinct authored green plug icon. The ping NSO is a test service, not a useful background app by itself. Plugins in `/kaihen/plugins/` still auto-start by default. With the updated bootstrap, a `NAME.no-autostart` marker or optional blacklist can keep a plugin installed for on-demand use. [Auto-start controls](PLUGIN-AUTOSTART.md).
 
 This is an informal working example, not an automatic setup package. [The combined component table](HEN-UPDATING.md#included-tested-files) identifies the startup inputs and separate companion dependencies. No Seedsow save, firmware, system policy or SDK is included.
 

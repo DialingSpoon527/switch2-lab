@@ -6,7 +6,7 @@ This is one modified kaiHEN build with two related features: replacing the runni
 
 I made these changes to avoid repeating Seedsow's 4/4 for every compatible HEN change, and to start useful background services during an existing session. The hbmenu apps are optional controls for those features. The runtime owns the processes; a PC client can issue the same IPC commands.
 
-On my console, this exact build completed startup, restarted a ping plugin while the host stayed open, replaced HEN with another instance of the same binary, then launched a **fresh plugin process through the replacement HEN**. RO and the supervisor stayed running. [Observed tests and limits](TESTING.md).
+The November 25 runtime completed startup on my console, restarted a ping plugin while the host stayed open, replaced HEN with another instance of the same binary, then launched a **fresh plugin process through the replacement HEN**. RO and the supervisor stayed running. [Observed tests and limits](TESTING.md).
 
 ## What is here
 
@@ -21,6 +21,16 @@ On my console, this exact build completed startup, restarted a ping plugin while
 | `tools/` | Core build/package and source-porting helpers |
 
 Based on official kaiHEN **20261123**, commit `3b23b5dc6e75539855eca69ffdda371ce69631bb`. The tested combined manager build is **2026112505**, with HEN protocol 7 and updater deferred protocol 5. These are a matched set; adding a controller NRO to stock HEN does not add the runtime features.
+
+## Plugin auto-start
+
+Third-party plugins still auto-start by default. The updated bootstrap supports
+an optional blacklist and per-plugin `NAME.no-autostart` markers, keeping selected
+plugins available on demand without launching them at boot. HEN, RO and the
+supervisor remain byte-identical to manager build 2026112505.
+[Auto-start controls](docs/PLUGIN-AUTOSTART.md). On my console, the new bootstrap
+started the unmarked supervisor, skipped nine marked plugins, and allowed a
+marked ping plugin to launch on demand, respond and stop.
 
 ## The two operations
 
@@ -40,6 +50,7 @@ From this directory:
 export DEVKITPRO=/opt/devkitpro
 export LIBOUNCE="$DEVKITPRO/libounce"
 make -j2
+sh bootstrap/test.sh
 sh plugin-tools/test.sh
 sh plugin-tools/build.sh
 ```
